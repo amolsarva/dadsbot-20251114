@@ -1,0 +1,21 @@
+✅ Confirmed `main` includes every recent merge; see `docs/branch-sync-report.md` for the commands and outputs captured from this workspace snapshot (still without remote tracking refs over the last three hours).
+
+Restore full 3+ turn interview flow (configurable max turns)
+Conversation flow: detect TTS playback failures and surface a retry/continue control so sessions cannot stall on "playing" state
+Conversation flow: add heartbeat timeout that finalizes or retries a turn if no "finalized" event arrives within N seconds
+Conversation flow: log per-turn state transitions and expose them in diagnostics so stuck turns can be diagnosed post-mortem
+Reinstate graceful end-intent handling with recap prompt
+Document Netlify blob provisioning and rotate access tokens routinely
+Add email delivery via Resend/SendGrid with proper API keys
+History page: show per-turn audio and transcripts, support playback
+Resume from last session: seed opening with recap of last transcript
+UI polish: status chips, progress indicator, mic level meter
+Error hardening: retry asks/saves, exponential backoff, inline alerts
+Add E2E tests for first-turn flow, finalize, and history listing
+Integrate OpenAI Realtime Voice (WS client, server token endpoint, TTS backoff)
+Add interactive voice barge-in, VAD, and interruptible TTS playback
+Offer selectable providers (OpenAI/Google) for STT+LLM, runtime switch in UI
+Document interview flow expectations inside the product and keep [`docs/interview-guide.md`](docs/interview-guide.md) handy when training the agent.
+
+- [ ] Prototype the OpenAI Neural/NeuralHD TTS integration using the helper in `lib/openaiTts.ts`, then replace the browser SpeechSynthesis fallback once streaming playback + latency checks look good.
+- [ ] Add a UI toggle that lets users choose between native browser TTS and OpenAI voices (remember offline fallback + quota exhaustion case).

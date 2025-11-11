@@ -1,0 +1,12 @@
+
+Provision these environment variables for production deployments:
+- NETLIFY_BLOBS_SITE_ID: required for Netlify blob storage access (use the UUID).
+- NETLIFY_BLOBS_STORE (optional): overrides the default blob store name.
+- NETLIFY_BLOBS_TOKEN: required for Netlify blob writes and diagnostics (supply the managed function token or a PAT with blobs write scope).
+- NETLIFY_BLOBS_API_URL / NETLIFY_BLOBS_EDGE_URL (required/optional): API base must be explicit; edge URL remains optional for advanced overrides.
+- NETLIFY_BLOBS_PUBLIC_BASE_URL (optional): use a custom absolute/relative URL for blob downloads.
+- OPENAI_API_KEY: optional; enables AI-generated follow-ups.
+- RESEND_API_KEY: optional; sends the summary email on finalize.
+- DEFAULT_NOTIFY_EMAIL: server-side default recipient (must be explicitly configured; placeholders rejected).
+- NEXT_PUBLIC_APP_NAME and patience knobs are optional for UI polish.
+
