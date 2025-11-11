@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         turnBlobs = listed.blobs.filter((b) => /turn-\d+\.json$/.test(b.pathname))
         turnBlobs.sort((a, b) => a.pathname.localeCompare(b.pathname))
       } catch (err) {
-        console.warn('Failed to list blob turns', err)
+        logError('list-turn-blobs:error', err, { sessionId })
         manifestListFailed = true
       }
     }
@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
             provider: typeof json.provider === 'string' ? json.provider : undefined,
           })
         } catch (err) {
-          console.warn('Failed to parse turn manifest', err)
+          logError('turn-manifest:parse:error', err, {
+            sessionId,
+            manifestPath: blob.pathname,
+          })
           // Skip malformed turn entries but continue processing others
         }
       }
@@ -410,4 +413,51 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ ok: false, error: e?.message || 'finalize_failed', foxes: listFoxes() }, { status: 400 })
   }
+}
+function timestamp() {
+  return new Date().toISOString()
+}
+
+function envSummary() {
+  return {
+    netlify: process.env.NETLIFY ?? null,
+    blobSiteId: process.env.NETLIFY_BLOBS_SITE_ID ? 'set' : 'missing',
+    blobStore: process.env.NETLIFY_BLOBS_STORE ?? null,
+    blobToken: process.env.NETLIFY_BLOBS_TOKEN ? 'set' : 'missing',
+  }
+}
+
+type DiagnosticLevel = 'log' | 'error'
+
+type DiagnosticPayload = Record<string, unknown>
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message, stack: error.stack }
+  }
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.parse(JSON.stringify(error))
+    } catch {
+      return { ...error }
+    }
+  }
+  if (typeof error === 'string') {
+    return { message: error }
+  }
+  return { message: 'Unknown error', value: error }
+}
+
+function logDiagnostic(level: DiagnosticLevel, step: string, payload: DiagnosticPayload = {}) {
+  const entry = { ...payload, envSummary: envSummary() }
+  const message = `[diagnostic] ${timestamp()} finalize:${step}`
+  if (level === 'error') {
+    console.error(message, entry)
+  } else {
+    console.log(message, entry)
+  }
+}
+
+function logError(step: string, error: unknown, payload: DiagnosticPayload = {}) {
+  logDiagnostic('error', step, { ...payload, error: serializeError(error) })
 }
