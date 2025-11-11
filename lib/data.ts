@@ -6,6 +6,54 @@ import { formatSessionTitleFallback } from './fallback-texts'
 import { normalizeHandle } from './user-scope'
 import { resolveDefaultNotifyEmailServer } from './default-notify-email.server'
 
+function dataTimestamp() {
+  return new Date().toISOString()
+}
+
+function dataEnvSummary() {
+  return {
+    netlify: process.env.NETLIFY ?? null,
+    nodeEnv: process.env.NODE_ENV ?? null,
+    blobSiteId: process.env.NETLIFY_BLOBS_SITE_ID ? 'set' : 'missing',
+    blobStore: process.env.NETLIFY_BLOBS_STORE ?? null,
+  }
+}
+
+type DataDiagnosticLevel = 'log' | 'error'
+
+type DataDiagnosticPayload = Record<string, unknown>
+
+function serializeDataError(error: unknown) {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message, stack: error.stack }
+  }
+  if (error && typeof error === 'object') {
+    try {
+      return JSON.parse(JSON.stringify(error))
+    } catch {
+      return { ...error }
+    }
+  }
+  if (typeof error === 'string') {
+    return { message: error }
+  }
+  return { message: 'Unknown error', value: error }
+}
+
+function logDataDiagnostic(level: DataDiagnosticLevel, step: string, payload: DataDiagnosticPayload = {}) {
+  const entry = { ...payload, envSummary: dataEnvSummary() }
+  const message = `[diagnostic] ${dataTimestamp()} data:${step}`
+  if (level === 'error') {
+    console.error(message, entry)
+  } else {
+    console.log(message, entry)
+  }
+}
+
+function logDataError(step: string, error: unknown, payload: DataDiagnosticPayload = {}) {
+  logDataDiagnostic('error', step, { ...payload, error: serializeDataError(error) })
+}
+
 export type Session = {
   id: string
   created_at: string
@@ -323,11 +371,11 @@ async function ensurePrimerLoadedFromStorage(handle?: string | null) {
           : undefined,
       )
     } catch (err) {
-      console.warn(
-        'Failed to load memory primer from storage',
-        err,
-        err && typeof err === 'object' ? (err as any).blobDetails : undefined,
-      )
+      const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+      logDataError('memory-primer:load:error', err, {
+        primerKey: key,
+        blobDetails: blobDetails ?? null,
+      })
     } finally {
       state.loaded = true
     }
@@ -365,20 +413,19 @@ async function hydrateSessionsFromBlobs() {
           mem.sessions.set(derived.id, { ...derived, turns: derived.turns ? [...derived.turns] : [] })
         }
       } catch (err) {
-        console.warn(
-          'Failed to parse session manifest',
-          err,
-          err && typeof err === 'object' ? (err as any).blobDetails : undefined,
-        )
+        const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+        logDataError('session-manifest:parse:error', err, {
+          manifestPath: manifest.pathname,
+          blobDetails: blobDetails ?? null,
+        })
       }
     }
     hydrationState.hydrated = true
   } catch (err) {
-    console.warn(
-      'Failed to list session manifests',
-      err,
-      err && typeof err === 'object' ? (err as any).blobDetails : undefined,
-    )
+    const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+    logDataError('session-manifest:list:error', err, {
+      blobDetails: blobDetails ?? null,
+    })
   } finally {
     hydrationState.attempted = true
   }
@@ -540,7 +587,13 @@ export async function rebuildMemoryPrimer(
   state.updatedAt = new Date().toISOString()
   state.loaded = true
   if (key === 'unassigned') {
-    await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch(() => undefined)
+    await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch((err) => {
+      logDataError('memory-primer:legacy-delete:error', err, {
+        primerKey: key,
+        target: LEGACY_MEMORY_PRIMER_PATH,
+      })
+      return undefined
+    })
   }
   return { text: primerText, url: state.url, updatedAt: state.updatedAt }
 }
@@ -556,9 +609,15 @@ export async function createSession({
   email_to: string
   user_handle?: string | null
 }): Promise<Session> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:pre-create:error', err, { phase: 'createSession' })
+  })
   const normalizedHandle = normalizeHandle(user_handle ?? undefined) ?? null
-  await getMemoryPrimer(normalizedHandle).catch(() => undefined)
+  await getMemoryPrimer(normalizedHandle).catch((err) => {
+    logDataError('memory-primer:pre-create:error', err, {
+      handle: normalizedHandle,
+    })
+  })
   const s: RememberedSession = {
     id: uid(),
     created_at: new Date().toISOString(),
@@ -583,7 +642,11 @@ export async function createSession({
   try {
     await persistSessionSnapshot(s)
   } catch (err) {
-    console.warn('Failed to persist initial session manifest', err, (err as any)?.blobDetails)
+    const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+    logDataError('session-manifest:persist-initial:error', err, {
+      sessionId: s.id,
+      blobDetails: blobDetails ?? null,
+    })
   }
   return s
 }
@@ -645,18 +708,20 @@ async function persistSessionSnapshot(session: RememberedSession) {
       }
     }
   } catch (err) {
-    console.warn(
-      'Failed to persist session snapshot',
-      err,
-      err && typeof err === 'object' ? (err as any).blobDetails : undefined,
-    )
+    const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+    logDataError('session-manifest:persist:error', err, {
+      sessionId: session.id,
+      blobDetails: blobDetails ?? null,
+    })
   }
 }
 
 export async function appendTurn(id: string, turn: Partial<Turn>) {
   let s = mem.sessions.get(id)
   if (!s) {
-    await ensureSessionMemoryHydrated().catch(() => undefined)
+    await ensureSessionMemoryHydrated().catch((err) => {
+      logDataError('session-memory:hydrate:append:error', err, { sessionId: id })
+    })
     s = mem.sessions.get(id)
   }
 
@@ -716,7 +781,9 @@ export async function finalizeSession(
   id: string,
   body: { clientDurationMs: number; sessionAudioUrl?: string | null },
 ): Promise<FinalizeSessionResult> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:finalize:error', err, { sessionId: id })
+  })
   const s = mem.sessions.get(id)
   if (!s) {
     flagFox({
@@ -852,7 +919,12 @@ export async function finalizeSession(
   mem.sessions.set(id, s)
 
   await rebuildMemoryPrimer(s.user_handle ?? null).catch((err) => {
-    console.warn('Failed to rebuild memory primer', err, (err as any)?.blobDetails)
+    const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+    logDataError('memory-primer:rebuild:error', err, {
+      handle: s.user_handle ?? null,
+      sessionId: s.id,
+      blobDetails: blobDetails ?? null,
+    })
   })
 
   const emailed = !!('ok' in emailStatus && emailStatus.ok)
@@ -889,7 +961,9 @@ export async function deleteSession(
     return { ok: false, deleted: false, reason: 'invalid_id' }
   }
 
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:delete:error', err, { sessionId: id })
+  })
 
   let session = mem.sessions.get(id)
   if (!session) {
@@ -912,11 +986,11 @@ export async function deleteSession(
       const deleted = await deleteBlob(url)
       if (deleted) removed = true
     } catch (err) {
-      console.warn('Failed to delete session artifact blob', {
+      const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+      logDataError('session-artifact:delete:error', err, {
         id,
         url,
-        err,
-        blobDetails: err && typeof err === 'object' ? (err as any).blobDetails : undefined,
+        blobDetails: blobDetails ?? null,
       })
     }
   }
@@ -929,11 +1003,11 @@ export async function deleteSession(
         removed = true
       }
     } catch (err) {
-      console.warn('Failed to delete blobs for prefix', {
+      const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+      logDataError('session-prefix:delete:error', err, {
         id,
         prefix,
-        err,
-        blobDetails: err && typeof err === 'object' ? (err as any).blobDetails : undefined,
+        blobDetails: blobDetails ?? null,
       })
     }
   }
@@ -953,18 +1027,48 @@ export async function deleteSession(
     )
     if (hasRemainingForHandle) {
       await rebuildMemoryPrimer(deletedHandle).catch((err) => {
-        console.warn('Failed to rebuild memory primer after deletion', err, (err as any)?.blobDetails)
+        const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+        logDataError('memory-primer:rebuild-after-delete:error', err, {
+          handle: deletedHandle,
+          blobDetails: blobDetails ?? null,
+        })
       })
     } else {
-      await deleteBlob(memoryPrimerPathForKey(deletedHandleKey)).catch(() => undefined)
+      await deleteBlob(memoryPrimerPathForKey(deletedHandleKey)).catch((err) => {
+        logDataError('memory-primer:delete:error', err, {
+          handle: deletedHandle,
+          primerKey: deletedHandleKey,
+          target: memoryPrimerPathForKey(deletedHandleKey),
+        })
+        return undefined
+      })
       if (deletedHandleKey === 'unassigned') {
-        await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch(() => undefined)
+        await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch((err) => {
+          logDataError('memory-primer:legacy-delete:error', err, {
+            primerKey: deletedHandleKey,
+            target: LEGACY_MEMORY_PRIMER_PATH,
+          })
+          return undefined
+        })
       }
       resetPrimerState(deletedHandleKey)
     }
   } else if (mem.sessions.size === 0) {
-    await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch(() => undefined)
-    await deleteBlob(memoryPrimerPathForKey('unassigned')).catch(() => undefined)
+    await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch((err) => {
+      logDataError('memory-primer:legacy-delete:error', err, {
+        primerKey: 'unassigned',
+        target: LEGACY_MEMORY_PRIMER_PATH,
+      })
+      return undefined
+    })
+    await deleteBlob(memoryPrimerPathForKey('unassigned')).catch((err) => {
+      logDataError('memory-primer:delete:error', err, {
+        handle: null,
+        primerKey: 'unassigned',
+        target: memoryPrimerPathForKey('unassigned'),
+      })
+      return undefined
+    })
     resetPrimerState()
   }
 
@@ -975,7 +1079,9 @@ export async function deleteSession(
 }
 
 export async function clearAllSessions(): Promise<{ ok: boolean }> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:clear-all:error', err)
+  })
 
   mem.sessions.clear()
 
@@ -985,16 +1091,21 @@ export async function clearAllSessions(): Promise<{ ok: boolean }> {
       try {
         await deleteBlobsByPrefix(prefix)
       } catch (err) {
-        console.warn('Failed to delete blobs during clearAllSessions', {
+        const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+        logDataError('clear-all:prefix-delete:error', err, {
           prefix,
-          err,
-          blobDetails: err && typeof err === 'object' ? (err as any).blobDetails : undefined,
+          blobDetails: blobDetails ?? null,
         })
       }
     }),
   )
 
-  await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch(() => undefined)
+  await deleteBlob(LEGACY_MEMORY_PRIMER_PATH).catch((err) => {
+    logDataError('clear-all:legacy-primer-delete:error', err, {
+      target: LEGACY_MEMORY_PRIMER_PATH,
+    })
+    return undefined
+  })
   resetPrimerState()
   hydrationState.attempted = true
   hydrationState.hydrated = true
@@ -1005,7 +1116,9 @@ export async function clearAllSessions(): Promise<{ ok: boolean }> {
 export async function deleteSessionsByHandle(
   handle?: string | null,
 ): Promise<{ ok: boolean; deleted: number }> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:delete-by-handle:error', err, { handle: handle ?? null })
+  })
   const normalizedHandle = normalizeHandle(handle ?? undefined)
   const idsToDelete: string[] = []
   for (const session of mem.sessions.values()) {
@@ -1024,8 +1137,8 @@ export async function deleteSessionsByHandle(
     try {
       const result = await deleteSession(id)
       if (result.deleted) deleted += 1
-    } catch {
-      // ignore errors so one bad session doesn't block others
+    } catch (error) {
+      logDataError('delete-by-handle:session-delete:error', error, { sessionId: id })
     }
   }
 
@@ -1033,7 +1146,9 @@ export async function deleteSessionsByHandle(
 }
 
 export async function listSessions(handle?: string | null): Promise<Session[]> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:list-sessions:error', err, { handle: handle ?? null })
+  })
   const normalizedHandle = normalizeHandle(handle ?? undefined)
   const seen = new Map<string, RememberedSession>()
   for (const session of mem.sessions.values()) {
@@ -1049,7 +1164,11 @@ export async function listSessions(handle?: string | null): Promise<Session[]> {
 }
 
 export async function listUserHandles(options: { limit?: number } = {}): Promise<string[]> {
-  await ensureSessionMemoryHydrated().catch(() => undefined)
+  await ensureSessionMemoryHydrated().catch((err) => {
+    logDataError('session-memory:hydrate:list-handles:error', err, {
+      limit: options.limit ?? null,
+    })
+  })
   const limitParam = Number.isFinite(options.limit ?? NaN) ? Number(options.limit) : NaN
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(Math.floor(limitParam), 24) : 12
 
@@ -1180,7 +1299,11 @@ async function fetchSessionManifest(sessionId: string): Promise<ManifestLookup |
       data,
     }
   } catch (err) {
-    console.warn('Failed to fetch session manifest', err, (err as any)?.blobDetails)
+    const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+    logDataError('session-manifest:fetch:error', err, {
+      sessionId,
+      blobDetails: blobDetails ?? null,
+    })
     return null
   }
 }

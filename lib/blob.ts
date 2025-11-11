@@ -1785,23 +1785,25 @@ export async function listBlobs(options: ListCommandOptions = {}): Promise<ListB
         const size = Number((metadata as any).size)
         const proxyUrl = buildProxyUrl(key)
         const downloadUrl = buildDownloadUrl(key)
-        blobs.push({
-          pathname: key,
-          url: proxyUrl,
-          downloadUrl,
-          uploadedAt,
-          size: Number.isFinite(size) ? size : undefined,
-        })
-      } catch (err) {
-        console.warn(`Failed to load metadata for blob ${key}`, err)
-        if (err && typeof err === 'object' && (err as any).blobDetails) {
-          console.warn('Blob metadata error details', (err as any).blobDetails)
-        }
-        const proxyUrl = buildProxyUrl(key)
-        const downloadUrl = buildDownloadUrl(key)
-        blobs.push({ pathname: key, url: proxyUrl, downloadUrl })
-      }
-    }),
+      blobs.push({
+        pathname: key,
+        url: proxyUrl,
+        downloadUrl,
+        uploadedAt,
+        size: Number.isFinite(size) ? size : undefined,
+      })
+    } catch (err) {
+      const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
+      logBlobDiagnostic('error', 'list:metadata:error', {
+        key,
+        error: serializeErrorForDiagnostics(err),
+        blobDetails: blobDetails ?? null,
+      })
+      const proxyUrl = buildProxyUrl(key)
+      const downloadUrl = buildDownloadUrl(key)
+      blobs.push({ pathname: key, url: proxyUrl, downloadUrl })
+    }
+  }),
   )
 
   blobs.sort((a, b) => a.pathname.localeCompare(b.pathname))
