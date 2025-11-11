@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { jsonErrorResponse } from '@/lib/api-error'
+import { getSecret } from '@/lib/secrets.server'
+import { createDiagnosticLogger, serializeError } from '@/lib/logging'
 import { resolveGoogleModel } from '@/lib/google'
 
 export const runtime = 'nodejs'
-
-type DiagnosticLevel = 'log' | 'error'
 
 const hypotheses = [
   'GOOGLE_API_KEY may be unset in the diagnostics environment.',
@@ -12,29 +12,21 @@ const hypotheses = [
   'The Google API response could contain errors or empty candidates.',
 ]
 
-function diagnosticsTimestamp() {
-  return new Date().toISOString()
-}
+const log = createDiagnosticLogger('diagnostics:google')
 
-function envSummary() {
+function secretsSummary() {
   return {
-    googleApiKey: process.env.GOOGLE_API_KEY ? 'set' : 'missing',
-    diagnosticsModel: process.env.GOOGLE_DIAGNOSTICS_MODEL ?? null,
-    fallbackModel: process.env.GOOGLE_MODEL ?? null,
+    googleApiKey: getSecret('GOOGLE_API_KEY') ? '[set]' : null,
+    diagnosticsModel: getSecret('GOOGLE_DIAGNOSTICS_MODEL') ?? null,
+    fallbackModel: getSecret('GOOGLE_MODEL') ?? null,
   }
 }
 
-function log(level: DiagnosticLevel, step: string, payload: Record<string, unknown> = {}) {
-  const entry = {
+function logStep(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  log(level, step, {
     ...payload,
-    envSummary: envSummary(),
-  }
-  const message = `[diagnostic] ${diagnosticsTimestamp()} diagnostics:google:${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+    secrets: secretsSummary(),
+  })
 }
 
 function extractReplyText(payload: any): string {
@@ -56,25 +48,25 @@ function extractReplyText(payload: any): string {
 }
 
 export async function GET() {
-  log('log', 'request:start', { hypotheses })
+  logStep('log', 'request:start', { hypotheses })
 
-  const googleApiKey = process.env.GOOGLE_API_KEY ? process.env.GOOGLE_API_KEY.trim() : ''
+  const googleApiKey = getSecret('GOOGLE_API_KEY')?.trim() ?? ''
   if (!googleApiKey) {
     const message = 'GOOGLE_API_KEY is required for diagnostics.'
-    log('error', 'request:missing-api-key', { message })
+    logStep('error', 'request:missing-api-key', { message })
     return NextResponse.json({ ok: false, error: 'missing_google_api_key', message }, { status: 500 })
   }
 
   let model: string
   try {
-    model = resolveGoogleModel(process.env.GOOGLE_DIAGNOSTICS_MODEL, process.env.GOOGLE_MODEL)
-    log('log', 'model:resolved', { model })
+    model = resolveGoogleModel(getSecret('GOOGLE_DIAGNOSTICS_MODEL'), getSecret('GOOGLE_MODEL'))
+    logStep('log', 'model:resolved', { model })
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : 'Unable to resolve Google diagnostics model. Configure GOOGLE_DIAGNOSTICS_MODEL or GOOGLE_MODEL.'
-    log('error', 'model:resolution-failed', { message })
+    logStep('error', 'model:resolution-failed', { message, error: serializeError(error) })
     return NextResponse.json({ ok: false, error: 'missing_google_model', message }, { status: 500 })
   }
 
@@ -112,7 +104,7 @@ export async function GET() {
           ? json.error
           : response.statusText || 'Request failed'
 
-      log('error', 'request:provider-error', {
+      logStep('error', 'request:provider-error', {
         status: response.status,
         message,
         providerResponseSnippet,
@@ -128,7 +120,7 @@ export async function GET() {
       )
     }
 
-    log('log', 'request:success', {
+    logStep('log', 'request:success', {
       status: providerStatus,
       providerError: providerErrorMessage,
     })
@@ -139,9 +131,7 @@ export async function GET() {
       reply,
     })
   } catch (error) {
-    log('error', 'request:exception', {
-      error: error instanceof Error ? { name: error.name, message: error.message } : { message: 'unknown_error' },
-    })
+    logStep('error', 'request:exception', { error: serializeError(error) })
     return jsonErrorResponse(error, 'Google diagnostics failed')
   }
 }

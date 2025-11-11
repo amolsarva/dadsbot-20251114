@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   BLOB_PROXY_PREFIX,
   deleteBlob,
-  primeNetlifyBlobContextFromHeaders,
+  primeStorageContextFromHeaders,
   putBlobFromBuffer,
   readBlob,
 } from '@/lib/blob'
@@ -151,7 +151,7 @@ function primeContext(req: Request | NextRequest) {
     headerKeys,
   })
   try {
-    const primed = primeNetlifyBlobContextFromHeaders(req.headers)
+    const primed = primeStorageContextFromHeaders(req.headers)
     logRouteEvent('log', 'blob-route:prime-context:result', {
       method,
       url,

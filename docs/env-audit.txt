@@ -19,17 +19,16 @@ This document enumerates every environment variable reference in the codebase an
 - `DEFAULT_NOTIFY_EMAIL` (required) — Server default email validated in `lib/default-notify-email.server.ts`.
 - `NEXT_PUBLIC_DEFAULT_NOTIFY_EMAIL` (required in client builds) — Enforced in `lib/default-notify-email.client.ts`.
 
-## Netlify Blobs & Storage
-- `NETLIFY_BLOBS_API_URL` (required) — Direct API base for storage diagnostics. Missing values immediately halt `/api/diagnostics/storage` with an explicit error.
-- `NETLIFY_BLOBS_SITE_ID`, `NETLIFY_BLOBS_STORE`, `NETLIFY_BLOBS_TOKEN` (required for Netlify-backed storage) — Validated via `utils/blob-env.ts` and used across blob utilities.
-- `NETLIFY_BLOBS_CONTEXT`, `NETLIFY_BLOBS_EDGE_URL`, `NETLIFY_BLOBS_UNCACHED_EDGE_URL`, `NETLIFY_BLOBS_CONSISTENCY` — Optional tuning parameters consumed by `lib/blob.ts`.
-- `NETLIFY_SITE_ID`, `NETLIFY_DEPLOY_ID`, `NETLIFY_BLOBS_PUBLIC_BASE_URL` — Optional metadata influencing diagnostics and public URL construction.
-- `BLOBS_TOKEN`, `BLOBS_SITE_ID`, `BLOBS_CONTEXT` — Deprecated aliases that now trigger diagnostics errors; rename them to the `NETLIFY_BLOBS_*` equivalents.
-- `FORCE_PROD_BLOBS` (optional) — Coerces production storage behavior (`utils/blob-env.ts`).
+## Supabase Storage
+- `STORAGE_MODE` (required) — Controls whether the runtime uses Supabase or the in-memory fallback. Validated by `utils/blob-env.ts` and logged during initialization.
+- `SUPABASE_URL` (required) — Base URL for Supabase REST calls. Missing values block `/api/diagnostics/storage` immediately.
+- `SUPABASE_SERVICE_ROLE_KEY` (required) — Authentication token for Supabase storage operations. Short or missing values are rejected by `lib/blob.ts`.
+- `SUPABASE_STORAGE_BUCKET` (required) — Bucket name for transcript and manifest persistence.
+- `SUPABASE_ANON_KEY` (optional) — Enables browser-based Supabase access when present; the API logs a warning if omitted.
 
 ## Deployment Metadata & Analytics
 - `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_NETLIFY_SITE_URL`, `NEXT_PUBLIC_DEPLOYMENT_URL` — Client-facing diagnostics metadata surfaced on `/diagnostics`.
-- `NETLIFY`, `RENDER_GIT_COMMIT`, `RENDER_GIT_COMMIT_MESSAGE`, `COMMIT_REF`, `COMMIT_MESSAGE`, `GIT_COMMIT_SHA`, `GIT_COMMIT_MESSAGE`, `GIT_COMMIT_TIMESTAMP`, `GITHUB_REPOSITORY`, `NEXT_PUBLIC_GITHUB_REPOSITORY`, `NEXT_PUBLIC_GIT_COMMIT_SHA`, `NEXT_PUBLIC_GIT_COMMIT_MESSAGE`, `NEXT_PUBLIC_GIT_COMMIT_TIMESTAMP`, `NEXT_PUBLIC_GIT_REPO_OWNER`, `NEXT_PUBLIC_GIT_REPO_SLUG`, `GIT_REPO_OWNER`, `GIT_REPO_SLUG`, `DEPLOY_CREATED_AT`, `DEPLOY_ID`, `NETLIFY_DEPLOY_ID`, `MY_DEPLOY_ID`, `NETLIFY_SITE_NAME`, `DEPLOY_URL`, `DEPLOY_PRIME_URL` — Deployment provenance identifiers used by `app/layout.tsx`, diagnostics APIs, and UI summaries.
+- `NETLIFY`, `RENDER_GIT_COMMIT`, `RENDER_GIT_COMMIT_MESSAGE`, `COMMIT_REF`, `COMMIT_MESSAGE`, `GIT_COMMIT_SHA`, `GIT_COMMIT_MESSAGE`, `GIT_COMMIT_TIMESTAMP`, `GITHUB_REPOSITORY`, `NEXT_PUBLIC_GITHUB_REPOSITORY`, `NEXT_PUBLIC_GIT_COMMIT_SHA`, `NEXT_PUBLIC_GIT_COMMIT_MESSAGE`, `NEXT_PUBLIC_GIT_COMMIT_TIMESTAMP`, `NEXT_PUBLIC_GIT_REPO_OWNER`, `NEXT_PUBLIC_GIT_REPO_SLUG`, `GIT_REPO_OWNER`, `GIT_REPO_SLUG`, `DEPLOY_CREATED_AT`, `DEPLOY_ID`, `NETLIFY_DEPLOY_ID`, `NETLIFY_SITE_NAME`, `DEPLOY_URL`, `DEPLOY_PRIME_URL` — Deployment provenance identifiers used by `app/layout.tsx`, diagnostics APIs, and UI summaries.
 - `NODE_ENV`, `NEXT_RUNTIME`, `CI` — Execution context flags referenced in diagnostics and build tooling.
 
 ## AWS & Netlify Function Context

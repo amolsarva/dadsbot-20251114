@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listBlobs, deleteBlobsByPrefix, primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { listBlobs, deleteBlobsByPrefix, primeStorageContextFromHeaders } from '@/lib/blob'
 import { jsonErrorResponse } from '@/lib/api-error'
 import { logBlobDiagnostic } from '@/utils/blob-env'
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     logRouteEvent('log', 'debug-blob:get:start', {
       url: request.url,
     })
-    primeNetlifyBlobContextFromHeaders(request.headers)
+    primeStorageContextFromHeaders(request.headers)
     const url = new URL(request.url)
     const prefix = normalizePrefix(url.searchParams.get('prefix'))
     const limitParam = url.searchParams.get('limit')
@@ -79,7 +79,7 @@ export async function DELETE(request: NextRequest) {
     logRouteEvent('log', 'debug-blob:delete:start', {
       url: request.url,
     })
-    primeNetlifyBlobContextFromHeaders(request.headers)
+    primeStorageContextFromHeaders(request.headers)
     const url = new URL(request.url)
     const prefix = normalizePrefix(url.searchParams.get('prefix'))
     if (!prefix) {

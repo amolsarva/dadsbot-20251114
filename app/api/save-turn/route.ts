@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { primeNetlifyBlobContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
+import { primeStorageContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
 import { jsonErrorResponse } from '@/lib/api-error'
 import { logBlobDiagnostic } from '@/utils/blob-env'
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     url: req.url,
   })
   try {
-    primeNetlifyBlobContextFromHeaders(req.headers)
+    primeStorageContextFromHeaders(req.headers)
   } catch (error) {
     logRouteEvent('error', 'save-turn:prime-context:failed', {
       url: req.url,

@@ -24,7 +24,7 @@
 - **Automation scripts:** `scripts/extract-fallback-copy.mjs` (sync helper) and `scripts/` utilities for blob inspection.
 
 ## Hosting migration resources
-- [Netlify migration checklist](docs/netlify-migration-guide.md) — step-by-step instructions for provisioning Netlify Blobs, wiring secrets, and verifying diagnostics after a deploy.
+- [Netlify migration checklist](docs/netlify-migration-guide.md) — step-by-step instructions for wiring Supabase storage, Netlify deploy settings, and diagnostics after a release.
 - [Hosting options for Netlify builds](docs/hosting-options.md) — side-by-side comparison of Netlify, Cloudflare, Render, AWS Amplify, and Fly.io for this Next.js build.
 
 ## Pages
@@ -38,19 +38,19 @@
   1. Key sentences from the latest user turns are categorised by Interview Guide stage.
   2. All sessions for that handle are re-analysed, newest notes flagged as “Latest”, and a biography-style cheat sheet is rewritten.
   3. The markdown snapshot is uploaded to blob storage and cached in-memory for fast reuse.
-- Inspect or download primers via the Netlify CLI: `netlify blobs:list --site $NETLIFY_BLOBS_SITE_ID --store memory --prefix primers/` and `netlify blobs:get --site $NETLIFY_BLOBS_SITE_ID --store memory --key primers/amol.md` (replace handle as needed). Session manifests remain under `sessions/{id}/` alongside transcripts.
+- Inspect or download primers through Supabase: open the bucket in the Supabase dashboard or run `supabase storage list buckets` followed by `supabase storage list objects --bucket dadsbot-sessions --path sessions/`.
 
 ## Diagnostics & operator tooling
 - **Diagnostics dashboard:** `/diagnostics` shows recent health checks, captured provider failures, and links to localStorage payloads (`DIAGNOSTIC_TRANSCRIPT_STORAGE_KEY`, `DIAGNOSTIC_PROVIDER_ERROR_STORAGE_KEY`).
 - **Logs:** the home panel card mirrors the most recent state transitions for quick triage. Browser storage keeps the rolling log per handle.
-- **Blob helpers:** `app/api/blob/[...path]` exposes inline blob contents with the site’s Netlify credentials.
+- **Blob helpers:** `app/api/blob/[...path]` exposes inline blob contents via the Supabase proxy credentials loaded from `tmpkeys.txt`.
 - **Commit stamp:** the footer (see `app/layout.tsx`) links to the active commit and renders the timestamp in US Eastern Time for release tracking.
-- **Memory Log review:** use the Netlify CLI to inspect per-session manifests (`netlify blobs:list --site $NETLIFY_BLOBS_SITE_ID --store memory --prefix sessions/`) and fetch specific logs (`netlify blobs:get --site $NETLIFY_BLOBS_SITE_ID --store memory --key sessions/<SESSION_ID>/session.json`). Primers live beside them at `memory/primers/<HANDLE>.md`.
+- **Memory Log review:** use the Supabase dashboard (Storage → Buckets) or CLI to inspect per-session manifests under `sessions/<SESSION_ID>/` and primers at `memory/primers/<HANDLE>.md`.
 
 ## Deployment & runtime notes
-- **Netlify-first storage:** configure `NETLIFY_BLOBS_SITE_ID` (and optionally `NETLIFY_BLOBS_STORE`) so transcripts and manifests stream to Blobs.
+- **Supabase-first storage:** configure `STORAGE_MODE=supabase` alongside Supabase URL, bucket, and service role key in `tmpkeys.txt`.
 - **Providers:** Google Gemini is the default; set `GOOGLE_API_KEY` and `GOOGLE_MODEL` for production. TTS falls back to the browser if `/api/tts` cannot return media.
-- **Session storage:** manifests and transcripts stream to Netlify Blobs using the configured site ID and store name.
+- **Session storage:** manifests and transcripts stream to Supabase Storage using the configured bucket and service role key.
 - **Handles:** normalised via `lib/user-scope.ts` to keep blob paths, localStorage keys, and URLs aligned.
 
 ## ToDoLater highlights

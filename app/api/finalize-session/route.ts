@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getBlobToken, listBlobs, primeNetlifyBlobContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
+import { getBlobToken, listBlobs, primeStorageContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
 import { sendSummaryEmail } from '@/lib/email'
 import { getSession, mergeSessionArtifacts, rememberSessionManifest } from '@/lib/data'
 import { flagFox, listFoxes } from '@/lib/foxes'
 import { resolveDefaultNotifyEmailServer } from '@/lib/default-notify-email.server'
+import { getSecret } from '@/lib/secrets.server'
 
 import { z } from 'zod'
 
@@ -36,7 +37,7 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  primeNetlifyBlobContextFromHeaders(req.headers)
+  primeStorageContextFromHeaders(req.headers)
   try {
     const body = await req.json()
     const { sessionId, email, sessionAudioUrl, sessionAudioDurationMs, emailsEnabled } = schema.parse(body)
@@ -419,11 +420,14 @@ function timestamp() {
 }
 
 function envSummary() {
+  const storageMode = getSecret('STORAGE_MODE') ?? null
+  const supabaseBucket = getSecret('SUPABASE_STORAGE_BUCKET')
+  const supabaseUrl = getSecret('SUPABASE_URL')
   return {
     netlify: process.env.NETLIFY ?? null,
-    blobSiteId: process.env.NETLIFY_BLOBS_SITE_ID ? 'set' : 'missing',
-    blobStore: process.env.NETLIFY_BLOBS_STORE ?? null,
-    blobToken: process.env.NETLIFY_BLOBS_TOKEN ? 'set' : 'missing',
+    storageMode,
+    supabaseBucket: supabaseBucket ?? null,
+    supabaseUrl: supabaseUrl ? `${supabaseUrl.slice(0, 8)}… (${supabaseUrl.length} chars)` : null,
   }
 }
 

@@ -22,5 +22,3 @@ default_notify_email extra@drwn.com
 openai_api_key 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
 
 sendgrid_api_key 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
-
-my_deploy_id amolsdeploy

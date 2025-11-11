@@ -369,7 +369,7 @@ export function DebugPanel({ userHandle }: DebugPanelProps) {
     <div className="debug-page">
       <h2>Debug storage console</h2>
       <p>
-        This workspace exercises the Netlify Blobs integration end-to-end. Record or upload artifacts, inspect the
+        This workspace exercises the Supabase storage integration end-to-end. Record or upload artifacts, inspect the
         stored files, and clear history when the on-disk state drifts from the session logs.
       </p>
 
@@ -388,12 +388,12 @@ export function DebugPanel({ userHandle }: DebugPanelProps) {
               <div>{status.env?.provider || 'unknown'}</div>
             </div>
             <div>
-              <strong>Store</strong>
-              <div>{status.env?.store || '—'}</div>
+              <strong>Bucket</strong>
+              <div>{status.env?.bucket || status.env?.store || '—'}</div>
             </div>
             <div>
-              <strong>Site ID</strong>
-              <div>{status.env?.siteId || '—'}</div>
+              <strong>Storage mode</strong>
+              <div>{status.env?.diagnostics?.mode || '—'}</div>
             </div>
             <div>
               <strong>Health</strong>

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+
 import { jsonErrorResponse } from '@/lib/api-error'
+import { getSecret, requireSecret } from '@/lib/secrets.server'
+import { createDiagnosticLogger, serializeError } from '@/lib/logging'
 
 export const runtime = 'nodejs'
-
-type DiagnosticLevel = 'log' | 'error'
 
 const hypotheses = [
   'OPENAI_API_KEY may be unset for diagnostics.',
@@ -12,28 +13,20 @@ const hypotheses = [
   'The OpenAI API might return an error payload or empty choices.',
 ]
 
-function diagnosticsTimestamp() {
-  return new Date().toISOString()
-}
+const log = createDiagnosticLogger('diagnostics:openai')
 
-function envSummary() {
+function secretsSummary() {
   return {
-    openaiApiKey: process.env.OPENAI_API_KEY ? 'set' : 'missing',
-    diagnosticsModel: process.env.OPENAI_DIAGNOSTICS_MODEL ?? null,
+    openaiApiKey: getSecret('OPENAI_API_KEY') ? '[set]' : null,
+    diagnosticsModel: getSecret('OPENAI_DIAGNOSTICS_MODEL') ?? null,
   }
 }
 
-function log(level: DiagnosticLevel, step: string, payload: Record<string, unknown> = {}) {
-  const entry = {
+function logStep(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  log(level, step, {
     ...payload,
-    envSummary: envSummary(),
-  }
-  const message = `[diagnostic] ${diagnosticsTimestamp()} diagnostics:openai:${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+    secrets: secretsSummary(),
+  })
 }
 
 function extractErrorMessage(error: any): string {
@@ -53,25 +46,17 @@ function extractStatus(error: any): number {
 }
 
 export async function GET() {
-  log('log', 'request:start', { hypotheses })
+  logStep('log', 'request:start', { hypotheses })
 
-  const openaiApiKey = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.trim() : ''
-  if (!openaiApiKey) {
-    const message = 'OPENAI_API_KEY is required for diagnostics.'
-    log('error', 'request:missing-api-key', { message })
-    return NextResponse.json({ ok: false, error: 'missing_openai_api_key', message }, { status: 500 })
-  }
-
-  const diagnosticsModel = process.env.OPENAI_DIAGNOSTICS_MODEL
-    ? process.env.OPENAI_DIAGNOSTICS_MODEL.trim()
-    : ''
+  const apiKey = requireSecret('OPENAI_API_KEY').trim()
+  const diagnosticsModel = getSecret('OPENAI_DIAGNOSTICS_MODEL')?.trim() ?? ''
   if (!diagnosticsModel) {
     const message = 'OPENAI_DIAGNOSTICS_MODEL must be configured for diagnostics checks.'
-    log('error', 'request:missing-model', { message })
+    logStep('error', 'request:missing-model', { message })
     return NextResponse.json({ ok: false, error: 'missing_openai_model', message }, { status: 500 })
   }
 
-  const client = new OpenAI({ apiKey: openaiApiKey })
+  const client = new OpenAI({ apiKey })
   const model = diagnosticsModel
 
   try {
@@ -86,7 +71,7 @@ export async function GET() {
 
     const reply = completion.choices?.[0]?.message?.content?.trim() || ''
 
-    log('log', 'request:success', {
+    logStep('log', 'request:success', {
       model,
       replyLength: reply.length,
     })
@@ -99,9 +84,10 @@ export async function GET() {
   } catch (error) {
     const status = extractStatus(error)
     const message = extractErrorMessage(error)
-    log('error', 'request:exception', {
+    logStep('error', 'request:exception', {
       status,
       message,
+      error: serializeError(error),
     })
     return jsonErrorResponse(error, message, status >= 400 ? status : 502, {
       status,

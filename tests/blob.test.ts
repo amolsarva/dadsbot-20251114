@@ -1,257 +1,100 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const tmpKeysPath = path.join(process.cwd(), 'tmpkeys.txt')
+
+function writeSecrets(contents: string) {
+  fs.writeFileSync(tmpKeysPath, contents, 'utf8')
+}
 
 afterEach(() => {
-  delete process.env.NETLIFY_BLOBS_SITE_ID
-  delete process.env.NETLIFY_BLOBS_TOKEN
-  delete process.env.NETLIFY_BLOBS_STORE
-  delete process.env.NETLIFY_BLOBS_API_URL
-  delete process.env.NETLIFY_BLOBS_CONTEXT
-  delete process.env.MY_DEPLOY_ID
-  delete process.env.NETLIFY_DEPLOY_ID
-  delete process.env.DEPLOY_ID
   vi.resetModules()
   vi.restoreAllMocks()
-  vi.unstubAllGlobals()
-})
-
-describe('safeBlobStore', () => {
-  it('initializes a Netlify store when all configuration is present', async () => {
-    process.env.NETLIFY_BLOBS_SITE_ID = '12345678-1234-1234-1234-1234567890ab'
-    process.env.NETLIFY_BLOBS_TOKEN = 'api-token'
-    process.env.NETLIFY_BLOBS_STORE = 'store-name'
-    process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-    process.env.MY_DEPLOY_ID = 'deploy-override'
-    process.env.NETLIFY_DEPLOY_ID = 'deploy-1234'
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    const storeMock = { ready: true }
-    const getStoreSpy = vi.fn(() => storeMock)
-    vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
-
-    const { safeBlobStore } = await import('@/utils/blob-env')
-    const store = await safeBlobStore()
-
-    expect(store).toBe(storeMock)
-    expect(getStoreSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'store-name',
-        siteID: '12345678-1234-1234-1234-1234567890ab',
-        token: 'api-token',
-        apiURL: 'https://api.netlify.com/api/v1/blobs',
-        deployID: 'deploy-override',
-      }),
-    )
-
-    const snapshotLog = logSpy.mock.calls.find((call) => call[2] === 'safe-blob-store-env-snapshot')
-    expect(snapshotLog?.[3]).toMatchObject({ deployIDSource: 'MY_DEPLOY_ID', deployID: 'deploy-override' })
-  })
-
-  it('prefers MY_DEPLOY_ID over legacy deploy identifiers', async () => {
-    process.env.NETLIFY_BLOBS_SITE_ID = '12345678-1234-1234-1234-1234567890ab'
-    process.env.NETLIFY_BLOBS_TOKEN = 'api-token'
-    process.env.NETLIFY_BLOBS_STORE = 'store-name'
-    process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-    process.env.MY_DEPLOY_ID = 'custom-deploy'
-    process.env.NETLIFY_DEPLOY_ID = 'netlify-deploy'
-    process.env.DEPLOY_ID = 'fallback-deploy'
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    const storeMock = { ready: true }
-    const getStoreSpy = vi.fn(() => storeMock)
-    vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
-
-    const { safeBlobStore } = await import('@/utils/blob-env')
-    await safeBlobStore()
-
-    expect(getStoreSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deployID: 'custom-deploy',
-      }),
-    )
-
-    const snapshotLog = logSpy.mock.calls.find((call) => call[2] === 'safe-blob-store-env-snapshot')
-    expect(snapshotLog?.[3]).toMatchObject({ deployIDSource: 'MY_DEPLOY_ID', deployID: 'custom-deploy' })
-  })
-
-  it('throws when configuration is incomplete', async () => {
-    process.env.NETLIFY_BLOBS_SITE_ID = '12345678-1234-1234-1234-1234567890ab'
-    process.env.NETLIFY_BLOBS_STORE = 'store-name'
-    process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-    process.env.NETLIFY_DEPLOY_ID = 'deploy-incomplete-test'
-
-    vi.doMock('@netlify/blobs', () => ({ getStore: vi.fn() }))
-
-    const { safeBlobStore } = await import('@/utils/blob-env')
-
-    await expect(safeBlobStore()).rejects.toThrow(/Missing blob env: NETLIFY_BLOBS_TOKEN/i)
-  })
-})
-
-describe('putBlobFromBuffer', () => {
-  it('uploads via Netlify when credentials are provided', async () => {
-    process.env.NETLIFY_BLOBS_SITE_ID = '12345678-1234-1234-1234-1234567890ab'
-    process.env.NETLIFY_BLOBS_TOKEN = 'api-token'
-    process.env.NETLIFY_BLOBS_STORE = 'store-name'
-    process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-    process.env.NETLIFY_DEPLOY_ID = 'deploy-from-netlify'
-    process.env.URL = 'https://deploy.example.netlify.app'
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    const setSpy = vi.fn(async () => ({}))
-    const storeMock = {
-      set: setSpy,
-      list: vi.fn(async () => ({ blobs: [] })),
-      getMetadata: vi.fn(async () => null),
-      delete: vi.fn(async () => {}),
-      getWithMetadata: vi.fn(async () => null),
-    }
-
-    const getStoreSpy = vi.fn(() => storeMock)
-    vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
-
-    const { putBlobFromBuffer } = await import('@/lib/blob')
-    const result = await putBlobFromBuffer('path/file.txt', Buffer.from('hello'), 'text/plain')
-
-    const firstCall = getStoreSpy.mock.calls.at(0)
-    const callArgs = Array.isArray(firstCall) ? (firstCall as unknown[]) : []
-    const configArg = (callArgs[0] ?? null) as Record<string, unknown> | null
-
-    expect(configArg).toMatchObject({
-      name: 'store-name',
-      siteID: '12345678-1234-1234-1234-1234567890ab',
-      token: 'api-token',
-      apiURL: 'https://api.netlify.com/api/v1/blobs',
-      deployID: 'deploy-from-netlify',
-    })
-    expect(configArg?.edgeURL).toBeUndefined()
-    expect(configArg?.uncachedEdgeURL).toBeUndefined()
-    expect(configArg?.consistency).toBeUndefined()
-    expect(setSpy).toHaveBeenCalled()
-    expect(result.url).toBe('/api/blob/path/file.txt')
-    expect(result.downloadUrl).toBe('https://deploy.example.netlify.app/api/blob/path/file.txt')
-
-    const deployLog = logSpy.mock.calls.find((call) => call[2] === 'deploy-id:selected')
-    expect(deployLog?.[3]).toMatchObject({
-      selected: expect.objectContaining({ key: 'NETLIFY_DEPLOY_ID', valuePreview: 'deploy-from-netlify' }),
-    })
-  })
-
-  it('uploads via Netlify without a token when the site ID is canonical', async () => {
-    process.env.NETLIFY_BLOBS_SITE_ID = '12345678-1234-1234-1234-1234567890ab'
-    process.env.NETLIFY_BLOBS_STORE = 'store-name'
-    process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-
-    const setSpy = vi.fn(async () => ({}))
-    const storeMock = {
-      set: setSpy,
-      list: vi.fn(async () => ({ blobs: [] })),
-      getMetadata: vi.fn(async () => null),
-      delete: vi.fn(async () => {}),
-      getWithMetadata: vi.fn(async () => null),
-    }
-
-    const getStoreSpy = vi.fn(() => storeMock)
-    vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
-
-    const { putBlobFromBuffer } = await import('@/lib/blob')
-    await putBlobFromBuffer('path/file.txt', Buffer.from('hello'), 'text/plain')
-
-    expect(getStoreSpy).toHaveBeenCalled()
-    const firstCall = getStoreSpy.mock.calls.at(0)
-    const callArgs = Array.isArray(firstCall) ? (firstCall as unknown[]) : []
-    const configArg = callArgs[0] ?? null
-    const call = (configArg && typeof configArg === 'object' ? configArg : {}) as Record<string, unknown>
-    expect(call).toMatchObject({ name: 'store-name', siteID: '12345678-1234-1234-1234-1234567890ab' })
-    expect('token' in call).toBe(false)
-    expect(setSpy).toHaveBeenCalled()
-  })
-
-  it('falls back to a data URL when storage is not configured', async () => {
-    vi.doMock('@netlify/blobs', () => ({ getStore: vi.fn() }))
-    const { putBlobFromBuffer } = await import('@/lib/blob')
-    const result = await putBlobFromBuffer('path/file.txt', Buffer.from('hi'), 'text/plain')
-
-    expect(result.url.startsWith('data:text/plain;base64,')).toBe(true)
-    expect(result.downloadUrl).toBe(result.url)
-  })
-})
-
-it('resolves a site slug to the canonical Netlify site ID', async () => {
-  process.env.NETLIFY_BLOBS_SITE_ID = 'dadsbot'
-  process.env.NETLIFY_BLOBS_TOKEN = 'api-token'
-  process.env.NETLIFY_BLOBS_STORE = 'store-name'
-  process.env.NETLIFY_BLOBS_API_URL = 'https://api.netlify.com/api/v1/blobs'
-
-  const setSpy = vi.fn(async () => ({}))
-  const storeMock = {
-    set: setSpy,
-    list: vi.fn(async () => ({ blobs: [] })),
-    getMetadata: vi.fn(async () => null),
-    delete: vi.fn(async () => {}),
-    getWithMetadata: vi.fn(async () => null),
+  if (fs.existsSync(tmpKeysPath)) {
+    fs.unlinkSync(tmpKeysPath)
   }
-
-  const getStoreSpy = vi.fn(() => storeMock)
-  const fetchSpy = vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ id: '98765432-4321-4321-4321-ba0987654321', name: 'dadsbot-site' }),
-  }))
-  vi.stubGlobal('fetch', fetchSpy)
-
-  vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
-
-  const { putBlobFromBuffer } = await import('@/lib/blob')
-  await putBlobFromBuffer('path/file.txt', Buffer.from('hello'), 'text/plain')
-
-  expect(fetchSpy).toHaveBeenCalledWith(
-    expect.stringContaining('/api/v1/sites/dadsbot'),
-    expect.objectContaining({ method: 'GET' }),
-  )
-
-  expect(getStoreSpy).toHaveBeenCalledWith(
-    expect.objectContaining({ siteID: '98765432-4321-4321-4321-ba0987654321' }),
-  )
 })
 
-it('falls back to memory when given a site slug without a token to resolve it', async () => {
-  process.env.NETLIFY_BLOBS_SITE_ID = 'dadsbot'
-  process.env.NETLIFY_BLOBS_STORE = 'store-name'
+describe('blob storage in memory mode', () => {
+  beforeEach(() => {
+    writeSecrets(`STORAGE_MODE=memory\n`)
+  })
 
-  const setSpy = vi.fn(async () => ({}))
-  const storeMock = {
-    set: setSpy,
-    list: vi.fn(async () => ({ blobs: [] })),
-    getMetadata: vi.fn(async () => null),
-    delete: vi.fn(async () => {}),
-    getWithMetadata: vi.fn(async () => null),
-  }
+  it('stores and lists blobs in memory', async () => {
+    const { refreshSecretsCache } = await import('@/lib/secrets.server')
+    refreshSecretsCache()
 
-  const getStoreSpy = vi.fn(() => storeMock)
-  vi.doMock('@netlify/blobs', () => ({ getStore: getStoreSpy }))
+    const { putBlobFromBuffer, listBlobs, readBlob, clearFallbackBlobs } = await import('@/lib/blob')
 
-  const { putBlobFromBuffer } = await import('@/lib/blob')
-  const result = await putBlobFromBuffer('path/file.txt', Buffer.from('hello'), 'text/plain')
-
-  expect(getStoreSpy).not.toHaveBeenCalled()
-  expect(result.url.startsWith('data:text/plain;base64,')).toBe(true)
-  expect(result.downloadUrl).toBe(result.url)
-})
-
-describe('listBlobs', () => {
-  it('returns fallback entries when storage is not configured', async () => {
-    vi.doMock('@netlify/blobs', () => ({ getStore: vi.fn() }))
-    const { putBlobFromBuffer, listBlobs, clearFallbackBlobs } = await import('@/lib/blob')
     clearFallbackBlobs()
 
-    await putBlobFromBuffer('sessions/test/item.json', Buffer.from('{}'), 'application/json')
-    const result = await listBlobs({ prefix: 'sessions/test/' })
+    const data = Buffer.from(JSON.stringify({ ok: true }), 'utf8')
+    await putBlobFromBuffer('sessions/test/session.json', data, 'application/json')
 
-    expect(result.blobs).toHaveLength(1)
-    expect(result.blobs[0].pathname).toBe('sessions/test/item.json')
-    expect(result.blobs[0].downloadUrl).toEqual(result.blobs[0].url)
+    const list = await listBlobs({ prefix: 'sessions/test/' })
+    expect(list.blobs.length).toBe(1)
+    expect(list.blobs[0]).toMatchObject({ pathname: 'sessions/test/session.json' })
+
+    const record = await readBlob('sessions/test/session.json')
+    expect(record?.contentType).toBe('application/json')
+    expect(record?.buffer.toString('utf8')).toContain('ok')
+  })
+})
+
+describe('blob storage in supabase mode', () => {
+  const fetchSpy = vi.fn()
+
+  beforeEach(() => {
+    writeSecrets(
+      [
+        'STORAGE_MODE=supabase',
+        'SUPABASE_URL=https://example.supabase.co',
+        'SUPABASE_SERVICE_ROLE_KEY=service-role-key',
+        'SUPABASE_STORAGE_BUCKET=artifacts',
+      ].join('\n') + '\n',
+    )
+
+    fetchSpy.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const url = typeof input === 'string' ? input : input.toString()
+      if (method === 'POST' && url.includes('/object/list/')) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 })
+      }
+      if (method === 'POST') {
+        return new Response(null, { status: 200 })
+      }
+      if (method === 'GET') {
+        return new Response('supabase-data', {
+          status: 200,
+          headers: { 'content-type': 'text/plain', 'content-length': '14' },
+        })
+      }
+      if (method === 'DELETE') {
+        return new Response(null, { status: 200 })
+      }
+      return new Response(null, { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch)
+  })
+
+  it('initializes the Supabase client and performs CRUD operations', async () => {
+    const { refreshSecretsCache } = await import('@/lib/secrets.server')
+    refreshSecretsCache()
+
+    const { putBlobFromBuffer, readBlob, deleteBlob } = await import('@/lib/blob')
+
+    const buffer = Buffer.from('hello-world', 'utf8')
+    const result = await putBlobFromBuffer('sessions/demo/item.txt', buffer, 'text/plain')
+    expect(result.url).toContain('sessions/demo/item.txt')
+    expect(fetchSpy).toHaveBeenCalled()
+
+    const record = await readBlob('sessions/demo/item.txt')
+    expect(record?.buffer.toString('utf8')).toContain('supabase-data')
+    expect(fetchSpy).toHaveBeenCalled()
+
+    await deleteBlob('sessions/demo/item.txt')
+    expect(fetchSpy).toHaveBeenCalled()
   })
 })

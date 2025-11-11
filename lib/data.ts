@@ -5,6 +5,7 @@ import { generateSessionTitle, SummarizableTurn } from './session-title'
 import { formatSessionTitleFallback } from './fallback-texts'
 import { normalizeHandle } from './user-scope'
 import { resolveDefaultNotifyEmailServer } from './default-notify-email.server'
+import { getSecret } from './secrets.server'
 
 function dataTimestamp() {
   return new Date().toISOString()
@@ -12,10 +13,11 @@ function dataTimestamp() {
 
 function dataEnvSummary() {
   return {
+    storageMode: getSecret('STORAGE_MODE') ?? null,
+    supabaseUrl: getSecret('SUPABASE_URL') ? '[set]' : null,
+    supabaseBucket: getSecret('SUPABASE_STORAGE_BUCKET') ?? null,
     netlify: process.env.NETLIFY ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
-    blobSiteId: process.env.NETLIFY_BLOBS_SITE_ID ? 'set' : 'missing',
-    blobStore: process.env.NETLIFY_BLOBS_STORE ?? null,
   }
 }
 

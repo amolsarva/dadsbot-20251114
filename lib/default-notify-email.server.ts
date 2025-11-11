@@ -1,44 +1,27 @@
+import { getSecret, requireSecret } from './secrets.server'
+import { createDiagnosticLogger } from './logging'
 import { DEFAULT_NOTIFY_EMAIL_GLOBAL_KEY, isPlaceholderEmail, maskEmail } from './default-notify-email.shared'
 
-function timestamp() {
-  return new Date().toISOString()
-}
+const logBase = createDiagnosticLogger('default-email')
 
-function envSummary() {
-  return {
-    nodeEnv: process.env.NODE_ENV ?? null,
-    platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
-    totalKeys: Object.keys(process.env).length,
-  }
-}
-
-type DiagnosticLevel = 'log' | 'error'
-
-type DiagnosticPayload = Record<string, unknown>
-
-function log(level: DiagnosticLevel, step: string, payload: DiagnosticPayload = {}) {
-  const entry = { ...payload, envSummary: envSummary() }
-  const message = `[diagnostic] ${timestamp()} ${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+function log(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  logBase(level, step, {
+    ...payload,
+    secrets: {
+      defaultEmail: getSecret('DEFAULT_NOTIFY_EMAIL') ? '[set]' : null,
+    },
+  })
 }
 
 const hypotheses = [
-  'DEFAULT_NOTIFY_EMAIL may be unset in the current deployment environment.',
+  'DEFAULT_NOTIFY_EMAIL may be unset in tmpkeys.txt for this deployment.',
   'DEFAULT_NOTIFY_EMAIL could still be using a placeholder fallback.',
-  'Environment variable whitespace or formatting might be trimming to an empty string.',
+  'Whitespace in tmpkeys.txt might trim to an empty string after parsing.',
 ]
 
 export function resolveDefaultNotifyEmailServer(): string {
   log('log', 'default-email:resolve:start', { hypotheses })
-  const raw = process.env.DEFAULT_NOTIFY_EMAIL
-  if (typeof raw !== 'string') {
-    log('error', 'default-email:resolve:missing', { reason: 'not_set' })
-    throw new Error('DEFAULT_NOTIFY_EMAIL is required for server workflows but was not provided.')
-  }
+  const raw = requireSecret('DEFAULT_NOTIFY_EMAIL')
   const trimmed = raw.trim()
   if (!trimmed.length) {
     log('error', 'default-email:resolve:missing', { reason: 'empty_after_trim' })
@@ -61,3 +44,4 @@ export function buildDefaultNotifyEmailBootstrapScript(): string {
   const maskedLiteral = JSON.stringify(masked)
   return `(() => {\n  const step = 'default-email:bootstrap:apply'\n  const now = new Date().toISOString()\n  const summary = typeof window === 'undefined'\n    ? { origin: '__no_window__', pathname: '__no_window__' }\n    : { origin: window.location.origin, pathname: window.location.pathname }\n  const email = ${emailLiteral}\n  const key = ${globalKey}\n  window[key] = email\n  const payload = { source: 'server-inline-script', emailPreview: ${maskedLiteral}, summary }\n  console.log('[diagnostic] ' + now + ' ' + step + ' ' + JSON.stringify(payload))\n  window.dispatchEvent(new CustomEvent('default-notify-email:ready', { detail: { email } }))\n})()`
 }
+

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { primeNetlifyBlobContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
+import { primeStorageContextFromHeaders, putBlobFromBuffer } from '@/lib/blob'
 import { mergeSessionArtifacts } from '@/lib/data'
 import { jsonErrorResponse } from '@/lib/api-error'
 import { logBlobDiagnostic } from '@/utils/blob-env'
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     url: request.url,
   })
   try {
-    primeNetlifyBlobContextFromHeaders(request.headers)
+    primeStorageContextFromHeaders(request.headers)
   } catch (error) {
     logRouteEvent('error', 'save-session-audio:prime-context:failed', {
       url: request.url,

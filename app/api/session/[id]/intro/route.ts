@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureSessionMemoryHydrated, getMemoryPrimer, getSessionMemorySnapshot } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
+import { getSecret } from '@/lib/secrets.server'
+import { createDiagnosticLogger, serializeError } from '@/lib/logging'
 import { collectAskedQuestions, findLatestUserDetails, normalizeQuestion, pickFallbackQuestion } from '@/lib/question-memory'
 import {
   formatIntroGreeting,
@@ -21,36 +23,26 @@ Instructions:
 - Summarize or acknowledge relevant remembered details naturally, without repeating the user's exact phrasing.
 - Respond only with JSON shaped as {"message":"<spoken message>","question":"<the follow-up question>"}. No commentary or code fences.`
 
-type DiagnosticLevel = 'log' | 'error'
-
 const introHypotheses = [
   'GOOGLE_API_KEY may be unset for intro generation.',
   'GOOGLE_MODEL might be missing or blank.',
   'Session memory could be incomplete, leading to fallback copy.',
 ]
 
-function introTimestamp() {
-  return new Date().toISOString()
-}
+const log = createDiagnosticLogger('session-intro')
 
-function introEnvSummary() {
+function introSecretsSummary() {
   return {
-    googleApiKey: process.env.GOOGLE_API_KEY ? 'set' : 'missing',
-    googleModel: process.env.GOOGLE_MODEL ?? null,
+    googleApiKey: getSecret('GOOGLE_API_KEY') ? '[set]' : null,
+    googleModel: getSecret('GOOGLE_MODEL') ?? null,
   }
 }
 
-function logIntro(level: DiagnosticLevel, step: string, payload: Record<string, unknown> = {}) {
-  const entry = {
+function logIntro(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  log(level, step, {
     ...payload,
-    envSummary: introEnvSummary(),
-  }
-  const message = `[diagnostic] ${introTimestamp()} ${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+    secrets: introSecretsSummary(),
+  })
 }
 
 function buildFallbackIntro(options: {
@@ -105,7 +97,7 @@ function buildHistorySummary(
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  primeNetlifyBlobContextFromHeaders(req.headers)
+  primeStorageContextFromHeaders(req.headers)
   const sessionId = params.id
   logIntro('log', 'session-intro:request:start', { sessionId, hypotheses: introHypotheses })
   await ensureSessionMemoryHydrated().catch(() => undefined)
@@ -142,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     fallbackQuestion,
   }
 
-  const googleApiKey = process.env.GOOGLE_API_KEY ? process.env.GOOGLE_API_KEY.trim() : ''
+  const googleApiKey = getSecret('GOOGLE_API_KEY')?.trim() ?? ''
   if (!googleApiKey) {
     const message = 'GOOGLE_API_KEY is required for intro generation.'
     logIntro('error', 'session-intro:google:missing-api-key', { sessionId, message })
@@ -151,12 +143,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   let model: string
   try {
-    model = resolveGoogleModel(process.env.GOOGLE_MODEL)
+    model = resolveGoogleModel(getSecret('GOOGLE_MODEL'))
     logIntro('log', 'session-intro:google:model-resolved', { sessionId, model })
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Unable to resolve Google model. Set GOOGLE_MODEL to a supported Gemini model.'
-    logIntro('error', 'session-intro:google:model-resolution-failed', { sessionId, message })
+    logIntro('error', 'session-intro:google:model-resolution-failed', {
+      sessionId,
+      error: serializeError(error),
+      message,
+    })
     return NextResponse.json({ ok: false, error: 'missing_google_model', message }, { status: 500 })
   }
 
@@ -232,9 +228,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       providerError: providerErrorMessage,
     })
     return NextResponse.json({ ok: true, message, fallback: false, debug })
-  } catch (error: any) {
-    const reason = typeof error?.message === 'string' ? error.message : 'intro_failed'
-    logIntro('error', 'session-intro:provider:exception', { sessionId, reason })
+  } catch (error) {
+    const reason = error instanceof Error && error.message ? error.message : 'intro_failed'
+    logIntro('error', 'session-intro:provider:exception', { sessionId, error: serializeError(error), reason })
     return NextResponse.json({ ok: true, message: fallbackMessage, fallback: true, reason, debug })
   }
 }

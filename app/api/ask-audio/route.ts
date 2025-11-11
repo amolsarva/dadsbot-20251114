@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureSessionMemoryHydrated, getMemoryPrimer, getSessionMemorySnapshot } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
+import { getSecret, requireSecret } from '@/lib/secrets.server'
+import { createDiagnosticLogger, serializeError } from '@/lib/logging'
 import {
   collectAskedQuestions,
   extractAskedQuestions,
@@ -120,8 +122,6 @@ type MemoryPrompt = {
   hasCurrentConversation: boolean
 }
 
-type DiagnosticLevel = 'log' | 'error'
-
 const providerHypotheses = [
   'The provider query parameter may be missing or blank.',
   'The PROVIDER environment variable may not be configured.',
@@ -129,29 +129,21 @@ const providerHypotheses = [
   'GOOGLE_MODEL might be blank or unresolved.',
 ]
 
-function diagnosticsTimestamp() {
-  return new Date().toISOString()
-}
+const log = createDiagnosticLogger('ask-audio')
 
-function providerEnvSummary() {
+function providerSecretsSummary() {
   return {
-    providerEnv: process.env.PROVIDER ?? null,
-    googleApiKey: process.env.GOOGLE_API_KEY ? 'set' : 'missing',
-    googleModel: process.env.GOOGLE_MODEL ?? null,
+    providerSecret: getSecret('PROVIDER') ?? null,
+    googleApiKey: getSecret('GOOGLE_API_KEY') ? '[set]' : null,
+    googleModel: getSecret('GOOGLE_MODEL') ?? null,
   }
 }
 
-function logDiagnostic(level: DiagnosticLevel, step: string, payload: Record<string, unknown> = {}) {
-  const entry = {
+function logDiagnostic(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  log(level, step, {
     ...payload,
-    envSummary: providerEnvSummary(),
-  }
-  const message = `[diagnostic] ${diagnosticsTimestamp()} ${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+    secrets: providerSecretsSummary(),
+  })
 }
 
 function softenQuestion(question: string | null | undefined): string {
@@ -236,11 +228,11 @@ async function buildMemoryPrompt(sessionId: string | undefined): Promise<MemoryP
 }
 
 export async function POST(req: NextRequest) {
-  primeNetlifyBlobContextFromHeaders(req.headers)
+  primeStorageContextFromHeaders(req.headers)
   const url = new URL(req.url)
   const providerQuery = url.searchParams.get('provider')
-  const providerEnv = typeof process.env.PROVIDER === 'string' ? process.env.PROVIDER.trim() : ''
-  const providerCandidate = providerQuery && providerQuery.trim().length ? providerQuery.trim() : providerEnv
+  const providerSecret = getSecret('PROVIDER')?.trim() ?? ''
+  const providerCandidate = providerQuery && providerQuery.trim().length ? providerQuery.trim() : providerSecret
   const provider = providerCandidate.trim()
 
   logDiagnostic('log', 'ask-audio:provider:resolve', {
@@ -251,7 +243,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (!provider) {
-    const message = 'No provider was supplied. Set the provider query parameter or PROVIDER env variable.'
+    const message = 'No provider was supplied. Set the provider query parameter or PROVIDER entry in tmpkeys.txt.'
     logDiagnostic('error', 'ask-audio:provider:missing', { message })
     return NextResponse.json({ ok: false, error: 'missing_provider', message }, { status: 500 })
   }
@@ -262,7 +254,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'unsupported_provider', message }, { status: 500 })
   }
 
-  const googleApiKey = process.env.GOOGLE_API_KEY ? process.env.GOOGLE_API_KEY.trim() : ''
+  const googleApiKey = getSecret('GOOGLE_API_KEY')?.trim() ?? ''
   if (!googleApiKey) {
     const message = 'GOOGLE_API_KEY is required for the Google audio provider.'
     logDiagnostic('error', 'ask-audio:google:missing-api-key', { message })
@@ -271,7 +263,7 @@ export async function POST(req: NextRequest) {
 
   let model: string
   try {
-    model = resolveGoogleModel(process.env.GOOGLE_MODEL)
+    model = resolveGoogleModel(getSecret('GOOGLE_MODEL'))
     logDiagnostic('log', 'ask-audio:google:model-resolved', { model })
   } catch (error) {
     const message =
@@ -486,9 +478,8 @@ export async function POST(req: NextRequest) {
         providerError: providerErrorMessage,
       },
     })
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error during ask-audio provider execution.'
-      logDiagnostic('error', 'ask-audio:provider:exception', { message })
+    } catch (error) {
+      logDiagnostic('error', 'ask-audio:provider:exception', { error: serializeError(error) })
       return NextResponse.json<AskAudioResponse>({
         ok: true,
         provider,

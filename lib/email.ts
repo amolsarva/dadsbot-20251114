@@ -1,37 +1,26 @@
 import { Resend } from 'resend'
+
+import { getSecret, requireSecret } from './secrets.server'
+import { createDiagnosticLogger, serializeError } from './logging'
 import { maskEmail } from './default-notify-email.shared'
 
-function timestamp() {
-  return new Date().toISOString()
-}
+const logBase = createDiagnosticLogger('email')
 
-function emailEnvSummary() {
-  return {
-    mailFrom: process.env.MAIL_FROM ? 'set' : 'missing',
-    enableSessionEmails: process.env.ENABLE_SESSION_EMAILS ?? null,
-    resendConfigured: Boolean(process.env.RESEND_API_KEY),
-    sendgridConfigured: Boolean(process.env.SENDGRID_API_KEY),
-  }
-}
-
-type DiagnosticLevel = 'log' | 'error'
-
-function log(level: DiagnosticLevel, step: string, payload: Record<string, unknown> = {}) {
-  const entry = {
+function log(level: 'log' | 'error', step: string, payload: Record<string, unknown> = {}) {
+  logBase(level, step, {
     ...payload,
-    envSummary: emailEnvSummary(),
-  }
-  const message = `[diagnostic] ${timestamp()} ${step} ${JSON.stringify(entry)}`
-  if (level === 'error') {
-    console.error(message)
-  } else {
-    console.log(message)
-  }
+    secrets: {
+      mailFrom: getSecret('MAIL_FROM') ? '[set]' : null,
+      enableFlag: getSecret('ENABLE_SESSION_EMAILS') ?? null,
+      resend: getSecret('RESEND_API_KEY') ? '[set]' : null,
+      sendgrid: getSecret('SENDGRID_API_KEY') ? '[set]' : null,
+    },
+  })
 }
 
 export function areSummaryEmailsEnabled() {
-  const raw = process.env.ENABLE_SESSION_EMAILS
-  if (raw === undefined) {
+  const raw = getSecret('ENABLE_SESSION_EMAILS')
+  if (!raw) {
     log('log', 'summary-email:flag-default-enabled')
     return true
   }
@@ -49,12 +38,7 @@ export function areSummaryEmailsEnabled() {
 }
 
 export async function sendSummaryEmail(to: string, subject: string, body: string) {
-  const fromRaw = process.env.MAIL_FROM
-  if (typeof fromRaw !== 'string') {
-    log('error', 'summary-email:missing-from', { reason: 'not_set' })
-    throw new Error('MAIL_FROM is required for summary emails but was not provided.')
-  }
-  const from = fromRaw.trim()
+  const from = requireSecret('MAIL_FROM').trim()
   if (!from.length) {
     log('error', 'summary-email:missing-from', { reason: 'empty_after_trim' })
     throw new Error('MAIL_FROM is required for summary emails but was not provided.')
@@ -75,36 +59,37 @@ export async function sendSummaryEmail(to: string, subject: string, body: string
     subjectPreview: subject ? subject.slice(0, 120) : null,
   })
 
-  if (process.env.RESEND_API_KEY) {
+  const resendKey = getSecret('RESEND_API_KEY')
+  if (resendKey) {
     try {
-      const resend = new Resend(process.env.RESEND_API_KEY)
+      const resend = new Resend(resendKey)
       await resend.emails.send({ from, to, subject, text: body })
       log('log', 'summary-email:dispatch:success', { provider: 'resend', toPreview: maskEmail(to) })
-      return { ok: true, provider: 'resend' }
-    } catch (e:any) {
-      const message = typeof e?.message === 'string' ? e.message : 'resend_failed'
+      return { ok: true, provider: 'resend' as const }
+    } catch (error) {
       log('error', 'summary-email:dispatch:error', {
         provider: 'resend',
-        error: message,
+        error: serializeError(error),
       })
-      return { ok: false, provider: 'resend', error: message }
+      return { ok: false, provider: 'resend' as const, error }
     }
   }
 
-  if (process.env.SENDGRID_API_KEY) {
+  const sendgridKey = getSecret('SENDGRID_API_KEY')
+  if (sendgridKey) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const sg = require('@sendgrid/mail')
-      sg.setApiKey(process.env.SENDGRID_API_KEY)
+      sg.setApiKey(sendgridKey)
       await sg.send({ to, from, subject, text: body })
       log('log', 'summary-email:dispatch:success', { provider: 'sendgrid', toPreview: maskEmail(to) })
-      return { ok: true, provider: 'sendgrid' }
-    } catch (e:any) {
-      const message = typeof e?.message === 'string' ? e.message : 'sendgrid_failed'
+      return { ok: true, provider: 'sendgrid' as const }
+    } catch (error) {
       log('error', 'summary-email:dispatch:error', {
         provider: 'sendgrid',
-        error: message,
+        error: serializeError(error),
       })
-      return { ok: false, provider: 'sendgrid', error: message }
+      return { ok: false, provider: 'sendgrid' as const, error }
     }
   }
 
@@ -113,3 +98,4 @@ export async function sendSummaryEmail(to: string, subject: string, body: string
   })
   return { skipped: true }
 }
+

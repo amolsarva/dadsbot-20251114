@@ -10,7 +10,6 @@ function envSnapshot() {
   return {
     NETLIFY: process.env.NETLIFY ?? null,
     DEPLOY_ID: process.env.DEPLOY_ID ?? null,
-    MY_DEPLOY_ID: process.env.MY_DEPLOY_ID ?? null,
     NODE_VERSION: process.version,
   }
 }

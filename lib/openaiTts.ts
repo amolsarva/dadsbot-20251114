@@ -1,13 +1,10 @@
 import { Buffer } from 'node:buffer'
 import OpenAI from 'openai'
 
-export type OpenAiTtsVoice =
-  | 'alloy'
-  | 'echo'
-  | 'fable'
-  | 'onyx'
-  | 'nova'
-  | 'shimmer'
+import { getSecret, requireSecret } from './secrets.server'
+import { createDiagnosticLogger, serializeError } from './logging'
+
+export type OpenAiTtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'
 
 export interface OpenAiTtsOptions {
   text: string
@@ -18,14 +15,13 @@ export interface OpenAiTtsOptions {
 }
 
 let cachedClient: OpenAI | null = null
+const log = createDiagnosticLogger('ai-tts')
 
 function getClient() {
   if (!cachedClient) {
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY env var must be set before requesting speech synthesis')
-    }
+    const apiKey = requireSecret('OPENAI_API_KEY')
     cachedClient = new OpenAI({ apiKey })
+    log('log', 'client:initialized', {})
   }
   return cachedClient
 }
@@ -38,33 +34,33 @@ export async function synthesizeSpeechWithOpenAi({
   speed = 1,
 }: OpenAiTtsOptions) {
   const client = getClient()
-
-  const response = await client.audio.speech.create({
-    model,
+  log('log', 'synthesis:start', {
+    textLength: text.length,
     voice,
-    input: text,
-    response_format: format,
+    model,
+    format,
     speed,
   })
-
-  const arrayBuffer = await response.arrayBuffer()
-  return Buffer.from(arrayBuffer)
+  try {
+    const response = await client.audio.speech.create({
+      model,
+      voice,
+      input: text,
+      response_format: format,
+      speed,
+    })
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    log('log', 'synthesis:success', { bytes: buffer.byteLength })
+    return buffer
+  } catch (error) {
+    log('error', 'synthesis:failed', { error: serializeError(error) })
+    throw new Error('Failed to synthesize speech using OpenAI.')
+  }
 }
 
-// TODO(later): wire this helper into a streaming playback layer so we can swap the
-// in-browser SpeechSynthesis strategy with OpenAI's Neural/NeuralHD voices once
-// latency testing looks good.
-//
-// Example sketch (intentionally commented out until we build the wiring):
-//
-// export async function speakWithOpenAi(text: string) {
-//   const audioBuffer = await synthesizeSpeechWithOpenAi({ text })
-//   const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
-//   const url = URL.createObjectURL(blob)
-//   const audio = new Audio(url)
-//   audio.play()
-//   return () => {
-//     audio.pause()
-//     URL.revokeObjectURL(url)
-//   }
-// }
+export function isOpenAiTtsConfigured() {
+  const key = getSecret('OPENAI_API_KEY')
+  return Boolean(key)
+}
+

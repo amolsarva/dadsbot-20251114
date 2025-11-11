@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { listSessions, clearAllSessions, deleteSessionsByHandle } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
 import { fetchStoredSessions } from '@/lib/history'
 import { generateSessionTitle, SummarizableTurn } from '@/lib/session-title'
 import { formatSessionTitleFallback } from '@/lib/fallback-texts'
 
 export async function GET(request: Request) {
-  primeNetlifyBlobContextFromHeaders(request.headers)
+  primeStorageContextFromHeaders(request.headers)
   const url = new URL(request.url)
   const handle = url.searchParams.get('handle')
   const items = await listSessions(handle)
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  primeNetlifyBlobContextFromHeaders(request.headers)
+  primeStorageContextFromHeaders(request.headers)
   const url = new URL(request.url)
   const handle = url.searchParams.get('handle')
   if (handle) {

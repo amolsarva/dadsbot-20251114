@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendTurn } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
 import { z } from 'zod'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string }}) {
-  primeNetlifyBlobContextFromHeaders(req.headers)
+  primeStorageContextFromHeaders(req.headers)
   try {
     const body = await req.json()
     const schema = z.object({

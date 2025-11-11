@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { blobHealth, getBlobEnvironment, primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { blobHealth, getBlobEnvironment, primeStorageContextFromHeaders } from '@/lib/blob'
 import { jsonErrorResponse } from '@/lib/api-error'
 
 export async function GET(request: NextRequest) {
   try {
-    primeNetlifyBlobContextFromHeaders(request.headers)
+    primeStorageContextFromHeaders(request.headers)
     const env = getBlobEnvironment()
     const health = await blobHealth()
     return NextResponse.json({ env, health })

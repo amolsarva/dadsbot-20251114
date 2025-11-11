@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { deleteSession } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  primeNetlifyBlobContextFromHeaders(request.headers)
+  primeStorageContextFromHeaders(request.headers)
   const id = params?.id
   if (!id) {
     return NextResponse.json({ ok: false, deleted: false, reason: 'missing_id' }, { status: 400 })

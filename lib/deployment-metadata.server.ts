@@ -12,7 +12,7 @@ type DeployIdCandidate = {
 }
 
 const HYPOTHESES = [
-  'NETLIFY_DEPLOY_ID may not be exported to the build environment, leaving blob writes without provenance.',
+  'Local builds may rely on a generated deploy identifier when NETLIFY_DEPLOY_ID is absent.',
   'Commit metadata could still reference deprecated hosting variables, breaking build footer links.',
   'Client diagnostics may not receive deployment context if no bootstrap script publishes it.',
 ]
@@ -78,7 +78,6 @@ function parseRepoFromEnv(): ParsedRepo {
 
 function pickDeployId(): { candidate: DeployIdCandidate | null; cleanedValue: string | null } {
   const candidates: DeployIdCandidate[] = [
-    { key: 'MY_DEPLOY_ID', value: process.env.MY_DEPLOY_ID },
     { key: 'NETLIFY_DEPLOY_ID', value: process.env.NETLIFY_DEPLOY_ID },
     { key: 'DEPLOY_ID', value: process.env.DEPLOY_ID },
     { key: 'NEXT_PUBLIC_DEPLOY_ID', value: process.env.NEXT_PUBLIC_DEPLOY_ID },
@@ -96,17 +95,19 @@ function pickDeployId(): { candidate: DeployIdCandidate | null; cleanedValue: st
   return { candidate: null, cleanedValue: null }
 }
 
+function buildFallbackDeployId(): { value: string; source: string } {
+  const fallback = `local-dev-${Date.now().toString(36)}`
+  log('log', 'resolve:deploy-id:fallback', { fallback, hypotheses: HYPOTHESES })
+  return { value: fallback, source: 'fallback:local-dev' }
+}
+
 export function resolveDeploymentMetadata(): DeploymentMetadata {
   log('log', 'resolve:start', {})
 
   const { candidate, cleanedValue } = pickDeployId()
-
-  if (!candidate || !cleanedValue) {
-    const message =
-      'Deploy ID is required but missing. Export NETLIFY_DEPLOY_ID (or MY_DEPLOY_ID/DEPLOY_ID) before building.'
-    log('error', 'resolve:deploy-id-missing', {})
-    throw new Error(message)
-  }
+  const { value: deployId, source: deployIdSource } = cleanedValue && candidate
+    ? { value: cleanedValue, source: candidate.key }
+    : buildFallbackDeployId()
 
   const commitRef = process.env.COMMIT_REF ?? process.env.GIT_COMMIT_SHA ?? null
   const commitMessage = process.env.COMMIT_MESSAGE ?? process.env.GIT_COMMIT_MESSAGE ?? null
@@ -123,8 +124,8 @@ export function resolveDeploymentMetadata(): DeploymentMetadata {
 
   const metadata: DeploymentMetadata = {
     platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
-    deployId: cleanedValue,
-    deployIdSource: candidate.key,
+    deployId,
+    deployIdSource,
     commitRef,
     commitMessage,
     commitTimestamp,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSession, appendTurn, finalizeSession } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
 import { listFoxes } from '@/lib/foxes'
 import { jsonErrorResponse } from '@/lib/api-error'
 import { resolveDefaultNotifyEmailServer } from '@/lib/default-notify-email.server'
@@ -23,7 +23,7 @@ function wrapStage<T>(stage: Stage, task: () => Promise<T>): Promise<T> {
 
 export async function POST(request: Request) {
   try {
-    primeNetlifyBlobContextFromHeaders(request.headers)
+    primeStorageContextFromHeaders(request.headers)
     const session = await wrapStage('create_session', () =>
       createSession({ email_to: resolveDefaultNotifyEmailServer() })
     )

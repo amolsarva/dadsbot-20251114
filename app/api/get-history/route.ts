@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getBlobEnvironment, listBlobs, primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { getBlobEnvironment, listBlobs, primeStorageContextFromHeaders } from '@/lib/blob'
 
 type HistoryEntry = {
   sessionId: string
@@ -12,7 +12,7 @@ type HistoryEntry = {
 }
 
 export async function GET(req: NextRequest) {
-  primeNetlifyBlobContextFromHeaders(req.headers)
+  primeStorageContextFromHeaders(req.headers)
   try {
     const storageEnv = getBlobEnvironment()
     if (!storageEnv.configured) {

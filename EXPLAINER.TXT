@@ -8,7 +8,7 @@ Project purpose & fit with the README
 
 Failure hypotheses to verify during debugging
 ---------------------------------------------
-1. **Netlify Blobs misconfiguration.** Without `NETLIFY_BLOBS_SITE_ID`, `NETLIFY_BLOBS_STORE`, and a valid token, all blob reads/writes in `lib/blob.ts` will fail and trigger diagnostic throws. Expect early crashes in API routes when context priming cannot happen.
+1. **Supabase storage misconfiguration.** Without `STORAGE_MODE=supabase`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a bucket name, all blob reads/writes in `lib/blob.ts` fail and trigger diagnostic throws. Expect early crashes in API routes when storage initialization cannot finish.
 2. **Missing default notification email.** `lib/default-notify-email.server.ts` throws if `DEFAULT_NOTIFY_EMAIL` is absent or uses the placeholder stub. Finalization and health checks depend on this, so deploys will hard-stop.
 3. **Unprovisioned AI credentials.** Both `/api/ask-audio` and `/api/session/[id]/intro` expect `GOOGLE_API_KEY` + `GOOGLE_MODEL`. Without them, Google calls fail and the handlers fall back to curated prompts only. `/api/diagnostics/google` exposes this quickly.
 4. **Email provider unset.** `lib/email.ts` requires `MAIL_FROM` and a provider key (`RESEND_API_KEY` or `SENDGRID_API_KEY`). If absent, finalize returns `emailed: false` and surfaces theory-4 fox flags.
@@ -17,15 +17,15 @@ Failure hypotheses to verify during debugging
 High-level execution flow
 -------------------------
 1. **Client state machine.** `app/page.tsx` mounts the recorder experience. It uses `lib/machine.ts` (a Zustand store) to manage button states, debug logs, and UI transitions. Audio capture runs through `lib/audio-bridge.ts` and `lib/session-recorder.ts` which wrap the Web Audio APIs, calibrate RMS baselines, and convert blobs to base64 for uploads.
-2. **Session creation & manifest caching.** `lib/data.ts` maintains in-memory `Session` objects, rebuilds Netlify Blob manifests, and regenerates markdown primers. It hydrates from blob storage on demand and writes updates back via `putBlobFromBuffer`. Diagnostic logging now funnels through `logDataDiagnostic` so every failure records `[diagnostic]` payloads with environment summaries.
+2. **Session creation & manifest caching.** `lib/data.ts` maintains in-memory `Session` objects, rebuilds Supabase manifests, and regenerates markdown primers. It hydrates from storage on demand and writes updates back via `putBlobFromBuffer`. Diagnostic logging now funnels through `logDataDiagnostic` so every failure records `[diagnostic]` payloads with environment summaries.
 3. **Question pipeline.** `/api/session/[id]/intro` fetches memory primers, builds a Google Gemini prompt, and handles fallback copy. `/api/ask-audio` receives user audio, transcribes or uses provided text, composes the memory prompt (history, asked questions, primer snippets), calls Gemini through `resolveGoogleModel`, and returns JSON replies. Fallback copy is used when Gemini errors.
-4. **Turn persistence.** `/api/save-turn` and `/api/save-session-audio` (not shown above) stream turn manifests and audio assets into Netlify Blobs. `lib/blob.ts` abstracts store resolution, including context priming from request headers and diagnostics when metadata retrieval fails.
+4. **Turn persistence.** `/api/save-turn` and `/api/save-session-audio` (not shown above) stream turn manifests and audio assets into Supabase Storage. `lib/blob.ts` abstracts bucket resolution and emits diagnostics when API calls fail.
 5. **Finalize & recap.** `/api/finalize-session` aggregates turn manifests, synthesizes transcripts, uploads text/JSON artifacts, sends summary emails through `lib/email.ts`, and rewrites the handle-specific memory primer. The revised implementation logs every catch with `[diagnostic]` entries and env summaries.
 6. **Diagnostics surface.** `/api/diagnostics/*` endpoints expose blob env status, deploy metadata, provider checks, and captured fox flags. The `/diagnostics` page consumes these for operators.
 
 Key modules & their roles
 -------------------------
-- `lib/blob.ts` & `utils/blob-env.ts`: resolve Netlify blob store configuration, track required env keys, normalize API base URLs, and provide `listBlobs`, `putBlobFromBuffer`, `deleteBlobsByPrefix`, etc. They emit structured diagnostics whenever configuration or API calls fail.
+- `lib/blob.ts` & `utils/blob-env.ts`: resolve Supabase configuration, track required tmpkeys, normalize API requests, and provide `listBlobs`, `putBlobFromBuffer`, `deleteBlobsByPrefix`, etc. They emit structured diagnostics whenever configuration or API calls fail.
 - `lib/data.ts`: in-memory session store, primer builder, session manifest generation, deletion workflows, and summary email triggers. Provides health checks (`dbHealth`) and memory snapshot APIs for server routes.
 - `lib/email.ts`: wraps Resend and SendGrid with environment validation. Honors the `ENABLE_SESSION_EMAILS` flag and masks email logs.
 - `lib/google.ts`: model normalization and enforcement for Google Gemini / Vertex AI family names. Throws if no valid model is supplied.
@@ -33,11 +33,12 @@ Key modules & their roles
 - `lib/default-notify-email.*`: ensures a production email is injected both server-side and into the client bootstrap script for UI references.
 - `lib/foxes.ts` (not shown in detail): collects “fox” diagnostic events that flag theories for operators (e.g., missing transcripts, email failures).
 - `app/api/*`: route handlers for recording (`ask-audio`, `save-turn`, `save-session-audio`), session lifecycle (`session/start`, `session/[id]/intro`, `finalize-session`), diagnostics, blob proxying (`blob/[...path]`), and history retrieval.
-- `docs/`: reference prompts (`interview-guide.md`), fallback copy, Netlify migration guide, and hosting comparisons referenced throughout the code.
+- `docs/`: reference prompts (`interview-guide.md`), fallback copy, the Netlify/Supabase migration guide, and hosting comparisons referenced throughout the code.
 
 Third-party dependencies & external services
 --------------------------------------------
-- **Netlify:** primary host, blob storage provider, and deployment metadata source. `netlify.toml` configures edge/runtime options; `lib/blob.ts` and diagnostics rely on Netlify-specific headers and tokens.
+- **Netlify:** primary host and deployment metadata source. `netlify.toml` configures edge/runtime options and diagnostics read Netlify-specific headers.
+- **Supabase:** storage provider reached through REST calls inside `lib/blob.ts` with credentials sourced from `tmpkeys.txt`.
 - **Google Gemini (Vertex AI):** main conversational AI via REST fetches inside `/api/ask-audio` and `/api/session/[id]/intro` with models resolved by `lib/google.ts`.
 - **OpenAI:** optional TTS via `lib/openaiTts.ts` and diagnostics via `/api/diagnostics/openai` (for verifying keys/models).
 - **Resend / SendGrid:** outbound email for session recaps (`lib/email.ts`).
@@ -45,7 +46,7 @@ Third-party dependencies & external services
 
 Does the implementation work?
 -----------------------------
-- Core flows (record → AI reply → finalize → email) are fully implemented and match the README’s “Experience map.” Provided the required environment variables are set (or baked in via the future `tmpkeys.txt` mechanism), the Next.js app should run on Netlify with blob persistence, AI prompting, and email summaries.
+- Core flows (record → AI reply → finalize → email) are fully implemented and match the README’s “Experience map.” Provided the required environment variables are set in `tmpkeys.txt`, the Next.js app should run on Netlify with Supabase persistence, AI prompting, and email summaries.
 - Diagnostics tooling is extensive: fox theory tracking, env inspectors, blob explorers, deploy metadata bootstrap, and localStorage mirrors give operators clear insight post-deploy.
 - The absence of `tmpkeys.txt` means secrets still come from the environment today. To embed credentials into the binary, create that file with `KEY=VALUE` pairs before building or extend the build script to transform it into `process.env` at compile time.
 - Unit/e2e tests exist (`tests/`, `playwright.config.ts`), but the user requested no local runs. Rely on Netlify deploy previews to validate.
@@ -53,7 +54,7 @@ Does the implementation work?
 Potential deployment blockers & mitigations
 -------------------------------------------
 - **Strict env validation:** Many modules throw immediately when secrets are missing (e.g., `DEFAULT_NOTIFY_EMAIL`, blob credentials). Double-check all required keys before deploying.
-- **Blob store quotas:** Session manifests and transcripts write to Netlify Blobs per turn. Monitor storage quotas and optionally configure `NETLIFY_BLOBS_PUBLIC_BASE_URL` for CDN access.
+- **Storage quotas:** Session manifests and transcripts write to Supabase Storage per turn. Monitor bucket size and optionally configure `PUBLIC_STORAGE_BASE_URL` for CDN access.
 - **Fallback reliance:** If Google Gemini is offline, the system falls back to scripted prompts. This keeps the UI responsive, but transcripts will be empty if speech-to-text fails, triggering fox warnings.
 - **Email deliverability:** Without `MAIL_FROM` and a provider key, finalization logs an error and marks the session status as `error`. Ensure DNS and sender domains are configured for Resend or SendGrid.
 

@@ -300,80 +300,24 @@ function readDeploymentSnapshot(): DeploymentSnapshot | null {
   return snapshot
 }
 
-function summarizeNetlifyDiagnostics(raw: any, deployment?: DeploymentSnapshot | null): string[] {
+function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot | null): string[] {
   if (!raw || typeof raw !== 'object') return []
   const summary: string[] = []
 
-  const tokenPresent = raw?.token?.present === true
-  const tokenMissing = Array.isArray(raw?.missing) && raw.missing.includes('token')
-  const tokenKeyCandidate = raw?.token?.selected?.key
-  const tokenSource =
-    typeof tokenKeyCandidate === 'string' && tokenKeyCandidate.length ? tokenKeyCandidate : undefined
-  const tokenLabel = tokenPresent
-    ? `present${tokenSource ? ` from ${tokenSource}` : ''}`
-    : raw?.token?.present === false && tokenMissing
-    ? 'missing'
-    : 'unknown'
-  const tokenLabelWithContext =
-    !tokenPresent && !tokenMissing
-      ? raw?.usingContext
-        ? 'not provided (Netlify context detected)'
-        : 'not provided'
-      : tokenLabel
+  const mode = typeof raw.mode === 'string' && raw.mode.length ? raw.mode : 'unknown'
+  summary.push(`Mode: ${mode}`)
 
-  const storePreviewCandidate = raw?.store?.selected?.valuePreview ?? raw?.store?.selected?.value
-  const storePreview =
-    typeof storePreviewCandidate === 'string' && storePreviewCandidate.length
-      ? storePreviewCandidate
-      : undefined
-  const storeDefaulted = raw?.store?.defaulted === true
-  const storeLabel = storePreview
-    ? `${storePreview}${storeDefaulted ? ' (defaulted)' : ''}`
-    : storeDefaulted
-    ? 'defaulted (value unknown)'
-    : 'unresolved'
-
-  const sitePreviewCandidate = raw?.siteId?.selected?.valuePreview ?? raw?.siteId?.selected?.value
-  const sitePreview =
-    typeof sitePreviewCandidate === 'string' && sitePreviewCandidate.length
-      ? sitePreviewCandidate
-      : undefined
-  const sitePresent = raw?.siteId?.present === true
-  const siteLabel = sitePresent
-    ? `${sitePreview || 'value provided'}${raw?.siteId?.defaulted ? ' (defaulted)' : ''}`
-    : raw?.siteId?.present === false
-    ? 'missing'
-    : 'unknown'
-
-  const overrides: string[] = []
-  const warnings: string[] = []
-  const edgeUrlCandidate = raw?.optional?.edgeUrl?.selected?.valuePreview
-  const apiUrlCandidate = raw?.optional?.apiUrl?.selected?.valuePreview
-  const uncachedEdgeUrlCandidate = raw?.optional?.uncachedEdgeUrl?.selected?.valuePreview
-  const edgeUrl = typeof edgeUrlCandidate === 'string' && edgeUrlCandidate.length ? edgeUrlCandidate : undefined
-  const apiUrl = typeof apiUrlCandidate === 'string' && apiUrlCandidate.length ? apiUrlCandidate : undefined
-  const uncachedEdgeUrl =
-    typeof uncachedEdgeUrlCandidate === 'string' && uncachedEdgeUrlCandidate.length
-      ? uncachedEdgeUrlCandidate
-      : undefined
-
-  if (edgeUrl) overrides.push(`edge=${edgeUrl}`)
-  if (uncachedEdgeUrl) overrides.push(`uncached_edge=${uncachedEdgeUrl}`)
-  if (apiUrl) overrides.push(`api=${apiUrl}`)
-
-  if (edgeUrl && /^https?:\/\/netlify-blobs\.netlify\.app/i.test(edgeUrl)) {
-    warnings.push('Edge override points at netlify-blobs.netlify.app; remove or switch to the API host for writes')
+  if (typeof raw.supabaseBucket === 'string' && raw.supabaseBucket.length) {
+    summary.push(`Bucket: ${raw.supabaseBucket}`)
   }
-  if (edgeUrl && !apiUrl) {
-    warnings.push('Edge override is set without NETLIFY_BLOBS_API_URL; uploads will target the edge host')
+  if (typeof raw.supabaseUrl === 'string' && raw.supabaseUrl.length) {
+    summary.push(`URL: ${raw.supabaseUrl}`)
   }
-
-  summary.push(`Store: ${storeLabel}`)
-  summary.push(`Token: ${tokenLabelWithContext}`)
-  summary.push(`Site ID: ${siteLabel}`)
-  summary.push(`Overrides: ${overrides.length ? overrides.join(' · ') : 'none set'}`)
-  if (warnings.length) {
-    summary.push(`Warnings: ${warnings.join(' · ')}`)
+  if (typeof raw.supabaseServiceRoleKey === 'string' && raw.supabaseServiceRoleKey.length) {
+    summary.push(`Service role key: ${raw.supabaseServiceRoleKey}`)
+  }
+  if (typeof raw.tmpKeysPath === 'string' && raw.tmpKeysPath.length) {
+    summary.push(`tmpkeys: ${raw.tmpKeysPath}`)
   }
 
   if (deployment) {
@@ -424,8 +368,8 @@ function formatSummary(key: TestKey, data: any): string {
     const blob = data.blob || {}
     const db = data.db || {}
     const storageLabel = env.hasBlobStore
-      ? env.storageStore
-        ? `${env.storageProvider || 'netlify'} (${env.storageStore})`
+      ? env.storageBucket
+        ? `${env.storageProvider || 'supabase'} (${env.storageBucket})`
         : env.storageProvider || 'configured'
       : env.storageProvider === 'memory'
       ? 'memory fallback'
@@ -438,54 +382,28 @@ function formatSummary(key: TestKey, data: any): string {
     if (blob) parts.push(`Storage health: ${blob.ok ? 'ok' : blob.reason || 'error'}`)
     if (db) parts.push(`DB: ${db.ok ? db.mode || 'ok' : db.reason || 'error'}`)
     if (env?.blobDiagnostics) {
-      const missing = Array.isArray(env.blobDiagnostics.missing)
-        ? env.blobDiagnostics.missing.filter((item: string) => typeof item === 'string')
-        : []
-      const contextLabel = env.blobDiagnostics.usingContext ? 'context detected' : 'no context payload'
-      parts.push(`Blob env: ${missing.length ? `missing ${missing.join(', ')}` : 'complete'} · ${contextLabel}`)
+      const diagParts: string[] = []
+      if (env.blobDiagnostics.mode) diagParts.push(`mode=${env.blobDiagnostics.mode}`)
+      if (env.blobDiagnostics.supabaseBucket) diagParts.push(`bucket=${env.blobDiagnostics.supabaseBucket}`)
+      if (env.blobDiagnostics.supabaseServiceRoleKey) {
+        diagParts.push(`serviceRole=${env.blobDiagnostics.supabaseServiceRoleKey}`)
+      }
+      if (env.blobDiagnostics.tmpKeysPath) diagParts.push(`tmpkeys=${env.blobDiagnostics.tmpKeysPath}`)
+      parts.push(`Storage diag: ${diagParts.length ? diagParts.join(' · ') : 'no diagnostics available'}`)
     }
     return parts.join(' · ')
   }
 
   if (key === 'storage') {
-    const diagnostics = data?.env?.diagnostics
+    const diagnostics = data?.env?.diagnostics ?? {}
     const detailParts: string[] = []
-    if (diagnostics) {
-      const tokenSource = diagnostics.token?.selected?.key
-      const tokenMissing = Array.isArray(diagnostics.missing) && diagnostics.missing.includes('token')
-      const tokenStatus = diagnostics.token?.present
-        ? `token present (${tokenSource || 'source unknown'})`
-        : tokenMissing
-        ? 'token missing'
-        : diagnostics.usingContext
-        ? 'token not provided (Netlify context detected)'
-        : 'token not provided'
-      detailParts.push(tokenStatus)
-      const siteSource = diagnostics.siteId?.selected?.key
-      const siteStatus = diagnostics.siteId?.present
-        ? `site ID present (${siteSource || 'source unknown'})`
-        : 'site ID missing'
-      detailParts.push(siteStatus)
-      const storeStatus = diagnostics.store?.selected?.valuePreview
-        ? `store ${diagnostics.store.selected.valuePreview}${diagnostics.store.defaulted ? ' (defaulted)' : ''}`
-        : 'store unresolved'
-      detailParts.push(storeStatus)
-      if (
-        diagnostics.optional?.edgeUrl?.present ||
-        diagnostics.optional?.apiUrl?.present ||
-        diagnostics.optional?.uncachedEdgeUrl?.present
-      ) {
-        const edge = diagnostics.optional?.edgeUrl?.selected?.valuePreview
-        const api = diagnostics.optional?.apiUrl?.selected?.valuePreview
-        const uncached = diagnostics.optional?.uncachedEdgeUrl?.selected?.valuePreview
-        if (edge) detailParts.push(`edge URL set (${edge})`)
-        if (api) detailParts.push(`API URL set (${api})`)
-        if (uncached) detailParts.push(`uncached edge URL set (${uncached})`)
-      }
-      if (Array.isArray(diagnostics.missing) && diagnostics.missing.length) {
-        detailParts.push(`missing: ${diagnostics.missing.join(', ')}`)
-      }
+    if (diagnostics.mode) detailParts.push(`mode ${diagnostics.mode}`)
+    if (diagnostics.supabaseBucket) detailParts.push(`bucket ${diagnostics.supabaseBucket}`)
+    if (diagnostics.supabaseServiceRoleKey) {
+      detailParts.push(`service role ${diagnostics.supabaseServiceRoleKey}`)
     }
+    if (diagnostics.supabaseUrl) detailParts.push(`url ${diagnostics.supabaseUrl}`)
+    if (diagnostics.tmpKeysPath) detailParts.push(`tmpkeys ${diagnostics.tmpKeysPath}`)
     const flow: BlobFlowDiagnostics | undefined = Array.isArray(data?.flow?.steps)
       ? (data.flow as BlobFlowDiagnostics)
       : undefined
@@ -516,10 +434,10 @@ function formatSummary(key: TestKey, data: any): string {
     if (typeof data?.message === 'string') {
       return detailParts.length ? `${data.message} · ${detailParts.join(' · ')}` : data.message
     }
-    if (data?.env?.provider === 'netlify' && data?.ok) {
-      return detailParts.length
-        ? `Netlify blob storage ready · ${detailParts.join(' · ')}`
-        : 'Netlify blob storage ready.'
+    if (data?.env?.provider === 'supabase' && data?.ok) {
+      const bucket = data?.env?.bucket || data?.env?.storageBucket
+      const label = bucket ? `Supabase storage ready (${bucket})` : 'Supabase storage ready.'
+      return detailParts.length ? `${label} · ${detailParts.join(' · ')}` : label
     }
     if (data?.env?.provider === 'memory') {
       return detailParts.length
@@ -726,22 +644,20 @@ export default function DiagnosticsPage() {
               .map((entry) => ({ key: entry.key, message: entry.message })),
           },
           {
-            hypothesis: 'Blob storage credentials may not match the current Netlify site configuration.',
+            hypothesis: 'Supabase storage credentials may be missing or misconfigured.',
             confirmed: collectIssues([
-              'NETLIFY_BLOBS_SITE_ID',
-              'NETLIFY_BLOBS_STORE',
-              'NETLIFY_BLOBS_TOKEN',
-              'NETLIFY_BLOBS_API_URL',
-              'NETLIFY_BLOBS_EDGE_URL',
-              'NETLIFY_BLOBS_PUBLIC_BASE_URL',
+              'STORAGE_MODE',
+              'SUPABASE_URL',
+              'SUPABASE_STORAGE_BUCKET',
+              'SUPABASE_SERVICE_ROLE_KEY',
+              'SUPABASE_ANON_KEY',
             ]).length > 0,
             evidence: collectIssues([
-              'NETLIFY_BLOBS_SITE_ID',
-              'NETLIFY_BLOBS_STORE',
-              'NETLIFY_BLOBS_TOKEN',
-              'NETLIFY_BLOBS_API_URL',
-              'NETLIFY_BLOBS_EDGE_URL',
-              'NETLIFY_BLOBS_PUBLIC_BASE_URL',
+              'STORAGE_MODE',
+              'SUPABASE_URL',
+              'SUPABASE_STORAGE_BUCKET',
+              'SUPABASE_SERVICE_ROLE_KEY',
+              'SUPABASE_ANON_KEY',
             ]).map((entry) => ({ key: entry.key, severity: entry.severity, message: entry.message })),
           },
           {
@@ -1219,7 +1135,7 @@ export default function DiagnosticsPage() {
           updateResult(key, { status: ok ? 'ok' : 'error', message })
           resultStatusLog[key] = ok ? 'ok' : 'error'
           if (key === 'storage') {
-            const diagnosticsSummary = summarizeNetlifyDiagnostics(parsed?.env?.diagnostics, deploymentSnapshot)
+            const diagnosticsSummary = summarizeSupabaseDiagnostics(parsed?.env?.diagnostics, deploymentSnapshot)
             if (diagnosticsSummary.length) {
               append('***KEY NETFLIFY ITEMS***')
               diagnosticsSummary.forEach(line => append(line))

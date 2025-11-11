@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { listUserHandles } from '@/lib/data'
-import { primeNetlifyBlobContextFromHeaders } from '@/lib/blob'
+import { primeStorageContextFromHeaders } from '@/lib/blob'
 
 export const runtime = 'nodejs'
 
@@ -12,7 +12,7 @@ function parseLimit(raw: string | null): number | undefined {
 }
 
 export async function GET(request: Request) {
-  primeNetlifyBlobContextFromHeaders(request.headers)
+  primeStorageContextFromHeaders(request.headers)
   const url = new URL(request.url)
   const limit = parseLimit(url.searchParams.get('limit'))
   const handles = await listUserHandles({ limit })
