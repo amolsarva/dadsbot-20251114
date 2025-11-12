@@ -309,7 +309,10 @@ export async function POST(req: NextRequest) {
       status: 'completed',
     })
 
-    let emailStatus: Awaited<ReturnType<typeof sendSummaryEmail>> | { skipped: true }
+    let emailStatus:
+      | Awaited<ReturnType<typeof sendSummaryEmail>>
+      | { skipped: true }
+      | { ok: false; provider: 'unknown'; error: string }
     emailStatus = { skipped: true }
 
     const allowEmails = emailsEnabled !== false
