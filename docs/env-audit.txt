@@ -32,7 +32,7 @@ This document enumerates every environment variable reference in the codebase an
 - `NODE_ENV`, `NEXT_RUNTIME`, `CI` — Execution context flags referenced in diagnostics and build tooling.
 
 ## AWS & Vercel Function Context
-- `AWS_REGION`, `AWS_DEFAULT_REGION`, `AWS_LAMBDA_FUNCTION_NAME`, `VERCEL`, `VERCEL_ENV` — Surface environment metadata in `/api/diagnostics/tues`.
+- `AWS_REGION`, `AWS_DEFAULT_REGION`, `AWS_LAMBDA_FUNCTION_NAME`, `VERCEL`, `VERCEL_ENV` — Surface environment metadata in `app/api/upload/route.ts` so upload diagnostics include platform context.
 
 ## Testing & Tooling
 - `PLAYWRIGHT_TEST_BASE_URL` — Overrides the base URL for Playwright E2E tests.
