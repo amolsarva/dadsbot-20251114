@@ -18,7 +18,8 @@ function timestamp() {
 
 function envSummary() {
   return {
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
     tmpKeysPath: cache?.path ?? resolveSecretsPath(),
   }

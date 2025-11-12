@@ -13,7 +13,8 @@ function timestamp(): string {
 function envSummary() {
   return {
     nodeEnv: process.env.NODE_ENV ?? null,
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     awsRegion: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? null,
     nextRuntime: process.env.NEXT_RUNTIME ?? null,
   }

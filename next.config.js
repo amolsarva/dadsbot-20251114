@@ -1,9 +1,10 @@
 const { env } = process
 
 const relevantEnvSummary = () => ({
-  NETLIFY: env.NETLIFY ?? null,
+  VERCEL: env.VERCEL ?? null,
+  VERCEL_ENV: env.VERCEL_ENV ?? null,
+  VERCEL_DEPLOYMENT_ID: env.VERCEL_DEPLOYMENT_ID ?? null,
   DEPLOY_ID: env.DEPLOY_ID ?? null,
-  NETLIFY_DEPLOY_ID: env.NETLIFY_DEPLOY_ID ?? null,
 })
 
 const diagnosticLog = (message, extra = {}) => {
@@ -21,23 +22,26 @@ const diagnosticThrow = (message, extra = {}) => {
   throw new Error(formattedMessage)
 }
 
-if (env.NETLIFY) {
-  diagnosticLog('Netlify runtime detected, verifying deploy identifiers')
+if (env.VERCEL) {
+  diagnosticLog('Vercel runtime detected, verifying deploy identifiers')
 
-  if (!env.DEPLOY_ID && env.NETLIFY_DEPLOY_ID) {
-    diagnosticLog('Hydrating DEPLOY_ID from NETLIFY_DEPLOY_ID', {
-      netlifyDeployId: env.NETLIFY_DEPLOY_ID,
+  if (!env.DEPLOY_ID && env.VERCEL_DEPLOYMENT_ID) {
+    diagnosticLog('Hydrating DEPLOY_ID from VERCEL_DEPLOYMENT_ID', {
+      vercelDeploymentId: env.VERCEL_DEPLOYMENT_ID,
     })
-    env.DEPLOY_ID = env.NETLIFY_DEPLOY_ID
+    env.DEPLOY_ID = env.VERCEL_DEPLOYMENT_ID
   }
 
   if (!env.DEPLOY_ID) {
     diagnosticThrow(
-      'Required Netlify deployment identifiers are missing. Ensure NETLIFY_DEPLOY_ID is available before building.',
+      'Required Vercel deployment identifiers are missing. Ensure VERCEL_DEPLOYMENT_ID is available before building.',
     )
   }
 } else {
-  diagnosticLog('Non-Netlify runtime detected; skipping Option B deploy identifier patch')
+  diagnosticLog('Custom runtime detected; verifying explicit DEPLOY_ID override')
+  if (!env.DEPLOY_ID) {
+    diagnosticThrow('DEPLOY_ID must be provided for non-Vercel builds to keep diagnostics consistent.')
+  }
 }
 
 /** @type {import('next').NextConfig} */

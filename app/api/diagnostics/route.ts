@@ -44,7 +44,7 @@ const ENDPOINTS: EndpointSummary[] = [
     key: 'tues',
     method: 'POST',
     path: '/api/diagnostics/tues',
-    description: 'Netlify-hosted credential diagnostic that mirrors the curl workflow for TUES.',
+    description: 'Vercel-hosted credential diagnostic that mirrors the curl workflow for TUES.',
   },
   {
     key: 'smoke',
@@ -69,28 +69,31 @@ const ENDPOINTS: EndpointSummary[] = [
 function detectDeployment() {
   const metadata = resolveDeploymentMetadata()
   const platform = metadata.platform
-  const functionBase = platform === 'netlify' ? '/.netlify/functions' : null
 
   return {
     platform,
-    functionBase,
+    functionBase: null as string | null,
     nodeEnv: process.env.NODE_ENV,
     edgeMiddleware: Boolean(process.env.NEXT_RUNTIME && process.env.NEXT_RUNTIME !== 'nodejs'),
-    netlifySiteId: metadata.siteId ?? null,
-    netlifySiteName: metadata.siteName ?? null,
+    vercelProjectId: metadata.projectId ?? null,
+    vercelProjectName: metadata.projectName ?? null,
+    vercelOrgId: metadata.orgId ?? null,
     deployContext: metadata.context ?? null,
-    deployUrl: metadata.deployUrl ?? metadata.deployPrimeUrl ?? metadata.siteUrl ?? null,
+    deployUrl: metadata.deployUrl ?? metadata.previewUrl ?? metadata.siteUrl ?? null,
+    previewUrl: metadata.previewUrl ?? null,
+    siteUrl: metadata.siteUrl ?? null,
     deployId: metadata.deployId,
     branch: metadata.branch,
     commitRef: metadata.commitRef,
+    region: metadata.region ?? null,
   }
 }
 
 const TROUBLESHOOTING = [
-  'If this endpoint returns 404 in production, the diagnostics routes were not bundled as server functions.',
-  'Confirm your build preserves the Next.js app directory and that Netlify is using the Next.js runtime.',
-  'When deploying to Netlify without the Next adapter, place functions under netlify/functions or configure `netlify.toml`.',
-  'Use `netlify functions:list` or `netlify dev` locally to confirm the diagnostics handlers are registered.',
+  'If this endpoint returns 404 in production, ensure the Vercel deployment exposes the Next.js app directory routes.',
+  'Confirm the project is configured with `output: "standalone"` so server functions remain routable on Vercel.',
+  'When custom timeouts or memory are required, declare the diagnostics routes inside `vercel.json` under `functions`.',
+  'Inspect recent Vercel build logs for pruning messages if the diagnostics handlers fail to compile.',
 ]
 
 export async function GET() {

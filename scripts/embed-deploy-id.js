@@ -8,7 +8,9 @@ function timestamp() {
 
 function envSnapshot() {
   return {
-    NETLIFY: process.env.NETLIFY ?? null,
+    VERCEL: process.env.VERCEL ?? null,
+    VERCEL_ENV: process.env.VERCEL_ENV ?? null,
+    VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID ?? null,
     DEPLOY_ID: process.env.DEPLOY_ID ?? null,
     NODE_VERSION: process.version,
   }
@@ -25,14 +27,14 @@ function log(level, step, payload = {}) {
 }
 
 log('log', 'start', {
-  note: 'Embedding Netlify deploy identifier before build.',
+  note: 'Embedding Vercel deployment identifier before build.',
   cwd: process.cwd(),
 })
 
 const deployId = typeof process.env.DEPLOY_ID === 'string' ? process.env.DEPLOY_ID.trim() : ''
 if (!deployId) {
   log('error', 'missing-deploy-id', {
-    note: 'DEPLOY_ID must be provided by Netlify at build time. Aborting to avoid broken runtime.',
+    note: 'DEPLOY_ID must be provided by Vercel (or explicitly for custom builds). Aborting to avoid broken runtime.',
   })
   process.exit(1)
 }

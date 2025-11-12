@@ -25,7 +25,8 @@ function storageEnvSummary() {
     supabaseServiceRoleKey: serviceRole ? `${serviceRole.length} chars` : null,
     secretsLoadedAt: secrets.loadedAt,
     tmpKeysPath: secrets.path,
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
   }
 }

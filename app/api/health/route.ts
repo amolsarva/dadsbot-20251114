@@ -18,7 +18,9 @@ function envSummary() {
   const supabaseUrl = getSecret('SUPABASE_URL')
   const supabaseBucket = getSecret('SUPABASE_STORAGE_BUCKET')
   return {
-    deployId: process.env.NETLIFY_DEPLOY_ID ?? process.env.DEPLOY_ID ?? null,
+    deployId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.DEPLOY_ID ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    vercel: process.env.VERCEL ?? null,
     storageMode,
     supabaseUrl: supabaseUrl ? `${supabaseUrl.slice(0, 8)}… (${supabaseUrl.length} chars)` : null,
     supabaseBucket: supabaseBucket ?? null,
@@ -63,7 +65,8 @@ export async function GET(request: Request) {
   })
 
   logDiagnostic('log', 'deploy-env:probe', {
-    deployId: process.env.NETLIFY_DEPLOY_ID ?? process.env.DEPLOY_ID ?? null,
+    deployId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.DEPLOY_ID ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
   })
 
   try {

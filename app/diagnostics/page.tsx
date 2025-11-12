@@ -49,9 +49,12 @@ type DeploymentSnapshot = {
   deployId?: string
   deployContext?: string
   deployUrl?: string
-  deployPrimeUrl?: string
+  previewUrl?: string
   siteUrl?: string
-  netlifySiteUrl?: string
+  vercelProjectId?: string
+  vercelProjectName?: string
+  vercelOrgId?: string
+  region?: string
   branch?: string
 }
 
@@ -125,9 +128,12 @@ function readClientEnvSummary(additional?: Record<string, unknown>) {
     deployId: deployment?.deployId ?? null,
     deployContext: deployment?.context ?? null,
     deployUrl: deployment?.deployUrl ?? null,
-    deployPrimeUrl: deployment?.deployPrimeUrl ?? null,
+    previewUrl: deployment?.previewUrl ?? null,
     siteUrl: deployment?.siteUrl ?? null,
-    netlifySiteUrl: deployment?.siteUrl ?? null,
+    vercelProjectId: deployment?.projectId ?? null,
+    vercelProjectName: deployment?.projectName ?? null,
+    vercelOrgId: deployment?.orgId ?? null,
+    region: deployment?.region ?? null,
     branch: deployment?.branch ?? null,
     ...browserSummary,
     ...(additional ?? {}),
@@ -285,12 +291,23 @@ function readDeploymentSnapshot(): DeploymentSnapshot | null {
     if (typeof deploymentMetadata.deployUrl === 'string' && deploymentMetadata.deployUrl.length) {
       snapshot.deployUrl = deploymentMetadata.deployUrl
     }
-    if (typeof deploymentMetadata.deployPrimeUrl === 'string' && deploymentMetadata.deployPrimeUrl.length) {
-      snapshot.deployPrimeUrl = deploymentMetadata.deployPrimeUrl
+    if (typeof deploymentMetadata.previewUrl === 'string' && deploymentMetadata.previewUrl.length) {
+      snapshot.previewUrl = deploymentMetadata.previewUrl
     }
     if (typeof deploymentMetadata.siteUrl === 'string' && deploymentMetadata.siteUrl.length) {
       snapshot.siteUrl = deploymentMetadata.siteUrl
-      snapshot.netlifySiteUrl = deploymentMetadata.siteUrl
+    }
+    if (typeof deploymentMetadata.projectId === 'string' && deploymentMetadata.projectId.length) {
+      snapshot.vercelProjectId = deploymentMetadata.projectId
+    }
+    if (typeof deploymentMetadata.projectName === 'string' && deploymentMetadata.projectName.length) {
+      snapshot.vercelProjectName = deploymentMetadata.projectName
+    }
+    if (typeof deploymentMetadata.orgId === 'string' && deploymentMetadata.orgId.length) {
+      snapshot.vercelOrgId = deploymentMetadata.orgId
+    }
+    if (typeof deploymentMetadata.region === 'string' && deploymentMetadata.region.length) {
+      snapshot.region = deploymentMetadata.region
     }
     if (typeof deploymentMetadata.branch === 'string' && deploymentMetadata.branch.length) {
       snapshot.branch = deploymentMetadata.branch
@@ -340,14 +357,23 @@ function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot 
     if (deployment.deployUrl) {
       summary.push(`Deploy URL: ${deployment.deployUrl}`)
     }
-    if (deployment.deployPrimeUrl) {
-      summary.push(`Preview URL: ${deployment.deployPrimeUrl}`)
+    if (deployment.previewUrl) {
+      summary.push(`Preview URL: ${deployment.previewUrl}`)
     }
-    if (deployment.netlifySiteUrl) {
-      summary.push(`Netlify site URL: ${deployment.netlifySiteUrl}`)
+    if (deployment.siteUrl) {
+      summary.push(`Production URL: ${deployment.siteUrl}`)
     }
-    if (deployment.siteUrl && deployment.siteUrl !== deployment.netlifySiteUrl) {
-      summary.push(`Site URL: ${deployment.siteUrl}`)
+    if (deployment.vercelProjectName) {
+      summary.push(`Vercel project: ${deployment.vercelProjectName}`)
+    }
+    if (deployment.vercelProjectId) {
+      summary.push(`Vercel project ID: ${deployment.vercelProjectId}`)
+    }
+    if (deployment.vercelOrgId) {
+      summary.push(`Vercel org ID: ${deployment.vercelOrgId}`)
+    }
+    if (deployment.region) {
+      summary.push(`Region: ${deployment.region}`)
     }
     if (deployment.deployId) {
       summary.push(`Deploy ID: ${deployment.deployId}`)
@@ -1021,14 +1047,23 @@ export default function DiagnosticsPage() {
       if (deploymentSnapshot.deployUrl) {
         append(`[deployment] Deploy URL: ${deploymentSnapshot.deployUrl}`)
       }
-      if (deploymentSnapshot.deployPrimeUrl) {
-        append(`[deployment] Preview URL: ${deploymentSnapshot.deployPrimeUrl}`)
+      if (deploymentSnapshot.previewUrl) {
+        append(`[deployment] Preview URL: ${deploymentSnapshot.previewUrl}`)
       }
-      if (deploymentSnapshot.netlifySiteUrl) {
-        append(`[deployment] Netlify site URL: ${deploymentSnapshot.netlifySiteUrl}`)
+      if (deploymentSnapshot.siteUrl) {
+        append(`[deployment] Production URL: ${deploymentSnapshot.siteUrl}`)
       }
-      if (deploymentSnapshot.siteUrl && deploymentSnapshot.siteUrl !== deploymentSnapshot.netlifySiteUrl) {
-        append(`[deployment] Site URL: ${deploymentSnapshot.siteUrl}`)
+      if (deploymentSnapshot.vercelProjectName) {
+        append(`[deployment] Vercel project: ${deploymentSnapshot.vercelProjectName}`)
+      }
+      if (deploymentSnapshot.vercelProjectId) {
+        append(`[deployment] Vercel project ID: ${deploymentSnapshot.vercelProjectId}`)
+      }
+      if (deploymentSnapshot.vercelOrgId) {
+        append(`[deployment] Vercel org ID: ${deploymentSnapshot.vercelOrgId}`)
+      }
+      if (deploymentSnapshot.region) {
+        append(`[deployment] Region: ${deploymentSnapshot.region}`)
       }
       if (deploymentSnapshot.deployId) {
         append(`[deployment] Deploy ID: ${deploymentSnapshot.deployId}`)

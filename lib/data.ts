@@ -16,7 +16,8 @@ function dataEnvSummary() {
     storageMode: getSecret('STORAGE_MODE') ?? null,
     supabaseUrl: getSecret('SUPABASE_URL') ? '[set]' : null,
     supabaseBucket: getSecret('SUPABASE_STORAGE_BUCKET') ?? null,
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
   }
 }

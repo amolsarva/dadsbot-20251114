@@ -8,7 +8,9 @@ const formatTimestamp = () => new Date().toISOString()
 const envSummary = () => ({
   totalKeys: Object.keys(process.env).length,
   nodeEnv: process.env.NODE_ENV ?? null,
-  platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
+  platform: process.env.VERCEL ? 'vercel' : 'custom',
+  vercelEnv: process.env.VERCEL_ENV ?? null,
+  vercelDeploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
 })
 
 const logStep = (step: string, payload?: Record<string, unknown>) => {
@@ -28,9 +30,9 @@ const logError = (step: string, error: unknown, payload?: Record<string, unknown
 }
 
 const HYPOTHESES = [
-  'Deploy ID variables were not exported into the runtime environment.',
-  'Deployment metadata helper is not wired to diagnostics route.',
-  'Netlify build metadata is incomplete so blobs cannot attribute writes correctly.',
+  'VERCEL_DEPLOYMENT_ID was not exposed during the build, so diagnostics fall back to a generated identifier.',
+  'Deployment metadata helper was not refreshed after migrating away from Netlify.',
+  'Vercel project metadata is incomplete which prevents blob attribution and client footer rendering.',
 ]
 
 export async function GET() {
@@ -43,12 +45,14 @@ export async function GET() {
       deployId: metadata.deployId,
       deployIdSource: metadata.deployIdSource,
       context: metadata.context,
-      siteId: metadata.siteId,
-      siteName: metadata.siteName,
+      projectId: metadata.projectId,
+      projectName: metadata.projectName,
+      orgId: metadata.orgId,
       deployUrl: metadata.deployUrl,
-      deployPrimeUrl: metadata.deployPrimeUrl,
+      previewUrl: metadata.previewUrl,
       branch: metadata.branch,
       commitRef: metadata.commitRef,
+      region: metadata.region,
       repo: metadata.repo,
       hypotheses: HYPOTHESES,
     }

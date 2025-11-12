@@ -624,7 +624,7 @@ type HeaderLike =
 
 export function primeStorageContextFromHeaders(_headers: HeaderLike): boolean {
   logBlobDiagnostic('log', 'prime-context:skipped', {
-    note: 'Supabase storage does not require Netlify context headers.',
+    note: 'Supabase storage does not require Vercel context headers.',
   })
   return false
 }

@@ -12,9 +12,9 @@ type DeployIdCandidate = {
 }
 
 const HYPOTHESES = [
-  'Local builds may rely on a generated deploy identifier when NETLIFY_DEPLOY_ID is absent.',
-  'Commit metadata could still reference deprecated hosting variables, breaking build footer links.',
-  'Client diagnostics may not receive deployment context if no bootstrap script publishes it.',
+  'Vercel preview builds may omit VERCEL_DEPLOYMENT_ID if the project environment variables are not exposed to the build.',
+  'Legacy Netlify variables could linger in the environment and confuse downstream diagnostics during the platform migration.',
+  'Client diagnostics will fail to hydrate if the bootstrap script stops publishing refreshed deployment metadata.',
 ]
 
 function formatTimestamp() {
@@ -23,7 +23,9 @@ function formatTimestamp() {
 
 function envSummary() {
   return {
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    vercelDeploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
     totalKeys: Object.keys(process.env).length,
   }
@@ -40,6 +42,16 @@ function log(level: LogLevel, step: string, payload: LogPayload = {}) {
 }
 
 function parseRepoFromEnv(): ParsedRepo {
+  const vercelOwner = process.env.VERCEL_GIT_REPO_OWNER ?? null
+  const vercelSlug = process.env.VERCEL_GIT_REPO_SLUG ?? null
+  if (vercelOwner && vercelSlug) {
+    return {
+      owner: vercelOwner,
+      name: vercelSlug,
+      httpsUrl: `https://github.com/${vercelOwner}/${vercelSlug}`,
+    }
+  }
+
   const fromGithub = process.env.GITHUB_REPOSITORY ?? process.env.NEXT_PUBLIC_GITHUB_REPOSITORY ?? null
   if (fromGithub && fromGithub.includes('/')) {
     const [owner, name] = fromGithub.split('/', 2)
@@ -78,7 +90,7 @@ function parseRepoFromEnv(): ParsedRepo {
 
 function pickDeployId(): { candidate: DeployIdCandidate | null; cleanedValue: string | null } {
   const candidates: DeployIdCandidate[] = [
-    { key: 'NETLIFY_DEPLOY_ID', value: process.env.NETLIFY_DEPLOY_ID },
+    { key: 'VERCEL_DEPLOYMENT_ID', value: process.env.VERCEL_DEPLOYMENT_ID },
     { key: 'DEPLOY_ID', value: process.env.DEPLOY_ID },
     { key: 'NEXT_PUBLIC_DEPLOY_ID', value: process.env.NEXT_PUBLIC_DEPLOY_ID },
   ]
@@ -101,6 +113,24 @@ function buildFallbackDeployId(): { value: string; source: string } {
   return { value: fallback, source: 'fallback:local-dev' }
 }
 
+function normalizeUrl(raw: string | null, label: string): string | null {
+  if (!raw) {
+    return null
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return null
+  }
+  const candidate = /^https?:/i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const parsed = new URL(candidate)
+    return parsed.toString()
+  } catch (error) {
+    log('error', 'url:parse-error', { label, raw, error })
+    return null
+  }
+}
+
 export function resolveDeploymentMetadata(): DeploymentMetadata {
   log('log', 'resolve:start', {})
 
@@ -109,34 +139,57 @@ export function resolveDeploymentMetadata(): DeploymentMetadata {
     ? { value: cleanedValue, source: candidate.key }
     : buildFallbackDeployId()
 
-  const commitRef = process.env.COMMIT_REF ?? process.env.GIT_COMMIT_SHA ?? null
-  const commitMessage = process.env.COMMIT_MESSAGE ?? process.env.GIT_COMMIT_MESSAGE ?? null
+  const commitRef =
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    process.env.COMMIT_REF ??
+    null
+  const commitMessage =
+    process.env.VERCEL_GIT_COMMIT_MESSAGE ??
+    process.env.GIT_COMMIT_MESSAGE ??
+    process.env.COMMIT_MESSAGE ??
+    null
   const commitTimestamp = process.env.COMMIT_TIMESTAMP ?? process.env.GIT_COMMIT_TIMESTAMP ?? null
-  const branch = process.env.BRANCH ?? process.env.HEAD ?? null
-  const siteId = process.env.NETLIFY_SITE_ID ?? process.env.SITE_ID ?? null
-  const siteName = process.env.NETLIFY_SITE_NAME ?? process.env.SITE_NAME ?? null
-  const deployUrl = process.env.DEPLOY_URL ?? null
-  const deployPrimeUrl = process.env.DEPLOY_PRIME_URL ?? null
-  const siteUrl = process.env.URL ?? null
-  const context = process.env.CONTEXT ?? process.env.NETLIFY_CONTEXT ?? null
+  const branch =
+    process.env.VERCEL_GIT_COMMIT_REF ??
+    process.env.GIT_COMMIT_REF ??
+    process.env.BRANCH ??
+    process.env.HEAD ??
+    null
+  const projectId = process.env.VERCEL_PROJECT_ID ?? null
+  const projectName = process.env.VERCEL_PROJECT_NAME ?? null
+  const orgId = process.env.VERCEL_ORG_ID ?? null
+  const deployUrl =
+    normalizeUrl(process.env.VERCEL_URL ?? process.env.DEPLOY_URL ?? null, 'deployUrl') ?? null
+  const previewUrl =
+    normalizeUrl(process.env.VERCEL_BRANCH_URL ?? process.env.DEPLOY_PRIME_URL ?? null, 'previewUrl') ?? null
+  const siteUrl =
+    normalizeUrl(
+      process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.URL ?? process.env.SITE_URL ?? null,
+      'siteUrl',
+    ) ?? null
+  const context = process.env.VERCEL_ENV ?? process.env.CONTEXT ?? null
+  const region = process.env.VERCEL_REGION ?? null
 
   const repo = parseRepoFromEnv()
 
   const metadata: DeploymentMetadata = {
-    platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
+    platform: process.env.VERCEL ? 'vercel' : 'custom',
     deployId,
     deployIdSource,
     commitRef,
     commitMessage,
     commitTimestamp,
     branch,
-    siteId,
-    siteName,
+    projectId,
+    projectName,
+    orgId,
     deployUrl,
-    deployPrimeUrl,
+    previewUrl,
     siteUrl,
     repo,
     context,
+    region,
   }
 
   log('log', 'resolve:success', { metadata })

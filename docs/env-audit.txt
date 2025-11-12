@@ -27,12 +27,12 @@ This document enumerates every environment variable reference in the codebase an
 - `SUPABASE_ANON_KEY` (optional) — Enables browser-based Supabase access when present; the API logs a warning if omitted.
 
 ## Deployment Metadata & Analytics
-- `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_NETLIFY_SITE_URL`, `NEXT_PUBLIC_DEPLOYMENT_URL` — Client-facing diagnostics metadata surfaced on `/diagnostics`.
-- `NETLIFY`, `RENDER_GIT_COMMIT`, `RENDER_GIT_COMMIT_MESSAGE`, `COMMIT_REF`, `COMMIT_MESSAGE`, `GIT_COMMIT_SHA`, `GIT_COMMIT_MESSAGE`, `GIT_COMMIT_TIMESTAMP`, `GITHUB_REPOSITORY`, `NEXT_PUBLIC_GITHUB_REPOSITORY`, `NEXT_PUBLIC_GIT_COMMIT_SHA`, `NEXT_PUBLIC_GIT_COMMIT_MESSAGE`, `NEXT_PUBLIC_GIT_COMMIT_TIMESTAMP`, `NEXT_PUBLIC_GIT_REPO_OWNER`, `NEXT_PUBLIC_GIT_REPO_SLUG`, `GIT_REPO_OWNER`, `GIT_REPO_SLUG`, `DEPLOY_CREATED_AT`, `DEPLOY_ID`, `NETLIFY_DEPLOY_ID`, `NETLIFY_SITE_NAME`, `DEPLOY_URL`, `DEPLOY_PRIME_URL` — Deployment provenance identifiers used by `app/layout.tsx`, diagnostics APIs, and UI summaries.
+- `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_DEPLOYMENT_URL` — Client-facing diagnostics metadata surfaced on `/diagnostics`.
+- `VERCEL`, `VERCEL_ENV`, `VERCEL_DEPLOYMENT_ID`, `VERCEL_PROJECT_ID`, `VERCEL_PROJECT_NAME`, `VERCEL_ORG_ID`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `VERCEL_REGION`, `RENDER_GIT_COMMIT`, `RENDER_GIT_COMMIT_MESSAGE`, `COMMIT_REF`, `COMMIT_MESSAGE`, `GIT_COMMIT_SHA`, `GIT_COMMIT_MESSAGE`, `GIT_COMMIT_TIMESTAMP`, `GITHUB_REPOSITORY`, `NEXT_PUBLIC_GITHUB_REPOSITORY`, `NEXT_PUBLIC_GIT_COMMIT_SHA`, `NEXT_PUBLIC_GIT_COMMIT_MESSAGE`, `NEXT_PUBLIC_GIT_COMMIT_TIMESTAMP`, `NEXT_PUBLIC_GIT_REPO_OWNER`, `NEXT_PUBLIC_GIT_REPO_SLUG`, `GIT_REPO_OWNER`, `GIT_REPO_SLUG`, `DEPLOY_CREATED_AT`, `DEPLOY_ID`, `DEPLOY_URL`, `DEPLOY_PRIME_URL`, `URL` — Deployment provenance identifiers used by `app/layout.tsx`, diagnostics APIs, and UI summaries.
 - `NODE_ENV`, `NEXT_RUNTIME`, `CI` — Execution context flags referenced in diagnostics and build tooling.
 
-## AWS & Netlify Function Context
-- `AWS_REGION`, `AWS_DEFAULT_REGION`, `AWS_LAMBDA_FUNCTION_NAME`, `NETLIFY` — Surface environment metadata in `/api/diagnostics/tues`.
+## Serverless Function Context
+- `AWS_REGION`, `AWS_DEFAULT_REGION`, `AWS_LAMBDA_FUNCTION_NAME`, `VERCEL` — Surface environment metadata in `/api/diagnostics/tues`.
 
 ## Testing & Tooling
 - `PLAYWRIGHT_TEST_BASE_URL` — Overrides the base URL for Playwright E2E tests.

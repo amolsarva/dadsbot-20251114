@@ -47,7 +47,9 @@ const formatTimestamp = () => new Date().toISOString()
 const envSummary = () => ({
   totalKeys: Object.keys(process.env).length,
   nodeEnv: process.env.NODE_ENV ?? null,
-  platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
+  platform: process.env.VERCEL ? 'vercel' : 'custom',
+  vercelEnv: process.env.VERCEL_ENV ?? null,
+  vercelDeploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
 })
 
 function logStep(step: string, payload?: Record<string, unknown>) {
@@ -152,25 +154,59 @@ const GROUPS: EnvGroup[] = [
     cat: 'Platform / Deploy',
     checks: [
       {
-        key: 'NETLIFY',
-        label: 'NETLIFY runtime flag',
-        validate: (value) => (value ? pass() : warn('Unset; deployment platform detection will fallback to heuristic.')),
-      },
-      {
-        key: 'NETLIFY_DEPLOY_ID',
-        label: 'Netlify deploy ID',
+        key: 'VERCEL',
+        label: 'VERCEL runtime flag',
         validate: (value) =>
           value
-            ? pass('Provided by Netlify runtime.')
-            : warn('Missing; local builds will generate a fallback deploy identifier.'),
+            ? pass('Running on Vercel infrastructure.')
+            : warn('Unset; treating this deployment as custom. Ensure DEPLOY_ID is configured manually.'),
+      },
+      {
+        key: 'VERCEL_DEPLOYMENT_ID',
+        label: 'Vercel deployment ID',
+        validate: (value) => {
+          if (process.env.VERCEL) {
+            return value
+              ? pass('Vercel deployment identifier detected.')
+              : fail('VERCEL_DEPLOYMENT_ID missing; expose it during the build or set DEPLOY_ID explicitly.', true)
+          }
+          return warn('Only required on Vercel deployments; provide DEPLOY_ID for custom hosts.')
+        },
+      },
+      {
+        key: 'VERCEL_ENV',
+        label: 'Vercel environment',
+        validate: (value) => {
+          if (process.env.VERCEL) {
+            return value
+              ? pass(`Environment ${value}.`)
+              : warn('VERCEL_ENV missing; diagnostics will fallback to a generic context label.')
+          }
+          return warn('Not running on Vercel; set CONTEXT or custom labels for clarity.')
+        },
+      },
+      {
+        key: 'VERCEL_REGION',
+        label: 'Vercel region',
+        validate: (value) =>
+          process.env.VERCEL
+            ? value
+              ? pass(`Region ${value}.`)
+              : warn('Region missing; latency investigations may be harder.')
+            : pass('Region not required for non-Vercel deployments.'),
       },
       {
         key: 'DEPLOY_ID',
-        label: 'Legacy deploy override',
-        validate: (value) =>
-          value
-            ? pass('Legacy deploy override detected.')
-            : pass('Not provided; relying on platform defaults.'),
+        label: 'Deployment identifier override',
+        validate: (value) => {
+          if (value) {
+            return pass('DEPLOY_ID detected and will be embedded into diagnostics.')
+          }
+          if (process.env.VERCEL) {
+            return warn('DEPLOY_ID not set explicitly; relying on VERCEL_DEPLOYMENT_ID injection.')
+          }
+          return fail('DEPLOY_ID missing for custom deployment; set it so diagnostics remain stable across releases.', true)
+        },
       },
     ],
   },
@@ -325,52 +361,84 @@ const GROUPS: EnvGroup[] = [
         validate: (value) => (value ? pass(`CI=${value}`) : pass('Not running in CI.')),
       },
       {
-        key: 'SITE_ID',
-        label: 'Site ID',
-        validate: (value) => (value ? pass(`SITE_ID=${value}`) : warn('SITE_ID missing; some logs cannot correlate to site.')),
+        key: 'VERCEL_PROJECT_ID',
+        label: 'Vercel project ID',
+        validate: (value) =>
+          process.env.VERCEL
+            ? value
+              ? pass(`Project ID ${value}.`)
+              : warn('VERCEL_PROJECT_ID missing; confirm the deployment is linked to the correct project.')
+            : warn('Not running on Vercel; project ID unavailable.'),
       },
       {
-        key: 'NETLIFY_SITE_NAME',
-        label: 'Netlify site name',
+        key: 'VERCEL_PROJECT_NAME',
+        label: 'Vercel project name',
+        validate: (value) =>
+          process.env.VERCEL
+            ? value
+              ? pass(`Project name ${value}.`)
+              : warn('VERCEL_PROJECT_NAME missing; dashboards may be harder to trace.')
+            : pass('Project name not required for custom deployments.'),
+      },
+      {
+        key: 'VERCEL_ORG_ID',
+        label: 'Vercel org ID',
+        validate: (value) =>
+          process.env.VERCEL
+            ? value
+              ? pass(`Org ID ${value}.`)
+              : warn('VERCEL_ORG_ID missing; confirm organization access configuration.')
+            : pass('Org ID not applicable outside Vercel.'),
+      },
+      {
+        key: 'VERCEL_URL',
+        label: 'Vercel deployment URL',
         validate: (value) =>
           value
-            ? pass(`Site name ${value}.`)
-            : warn('NETLIFY_SITE_NAME missing; admin console links may not render.'),
+            ? looksLikeURL(/^https?:/.test(value) ? value : `https://${value}`)
+              ? pass('Deployment URL detected.')
+              : fail('VERCEL_URL should resolve to a valid URL or hostname.', false)
+            : warn('VERCEL_URL missing; preview deployment links will be unavailable.'),
       },
       {
-        key: 'CONTEXT',
-        label: 'Netlify build context',
-        validate: (value) => (value ? pass(`CONTEXT=${value}`) : warn('CONTEXT missing; Netlify build context unknown.')),
+        key: 'VERCEL_BRANCH_URL',
+        label: 'Vercel branch preview URL',
+        validate: (value) =>
+          value
+            ? looksLikeURL(/^https?:/.test(value) ? value : `https://${value}`)
+              ? pass('Branch preview URL detected.')
+              : fail('VERCEL_BRANCH_URL should be a full URL or hostname.', false)
+            : warn('Branch preview URL missing; shareable preview links may be absent.'),
+      },
+      {
+        key: 'VERCEL_PROJECT_PRODUCTION_URL',
+        label: 'Vercel production URL',
+        validate: (value) =>
+          value
+            ? looksLikeURL(/^https?:/.test(value) ? value : `https://${value}`)
+              ? pass('Production URL detected.')
+              : fail('VERCEL_PROJECT_PRODUCTION_URL should be a valid URL or hostname.', false)
+            : warn('Production URL missing; configure the canonical domain in Vercel.'),
       },
       {
         key: 'DEPLOY_URL',
-        label: 'Published deploy URL',
+        label: 'Legacy deploy URL',
         validate: (value) =>
           value
             ? looksLikeURL(value)
-              ? pass('Deploy URL detected.')
+              ? pass('Legacy deploy URL detected.')
               : fail('DEPLOY_URL should be a full URL starting with http(s)://', false)
-            : warn('DEPLOY_URL missing; production links may not resolve.'),
-      },
-      {
-        key: 'DEPLOY_PRIME_URL',
-        label: 'Preview deploy URL',
-        validate: (value) =>
-          value
-            ? looksLikeURL(value)
-              ? pass('Preview URL detected.')
-              : fail('DEPLOY_PRIME_URL should be a full URL starting with http(s)://', false)
-            : warn('DEPLOY_PRIME_URL missing; preview deploy link unavailable.'),
+            : pass('Legacy deploy URL not set; relying on Vercel URLs.'),
       },
       {
         key: 'URL',
-        label: 'Primary site URL',
+        label: 'Primary site URL override',
         validate: (value) =>
           value
             ? looksLikeURL(value)
-              ? pass('Site URL detected.')
+              ? pass('Primary site URL override detected.')
               : fail('URL should be a full URL starting with http(s)://', false)
-            : warn('Primary site URL missing; configure a production domain.'),
+            : pass('Primary site URL managed by Vercel configuration.'),
       },
       {
         key: 'NEXT_RUNTIME',

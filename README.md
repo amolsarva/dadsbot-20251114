@@ -24,8 +24,8 @@
 - **Automation scripts:** `scripts/extract-fallback-copy.mjs` (sync helper) and `scripts/` utilities for blob inspection.
 
 ## Hosting migration resources
-- [Netlify migration checklist](docs/netlify-migration-guide.md) — step-by-step instructions for wiring Supabase storage, Netlify deploy settings, and diagnostics after a release.
-- [Hosting options for Netlify builds](docs/hosting-options.md) — side-by-side comparison of Netlify, Cloudflare, Render, AWS Amplify, and Fly.io for this Next.js build.
+- [Vercel migration checklist](docs/vercel-migration-guide.md) — step-by-step instructions for wiring Supabase storage, Vercel deploy settings, and diagnostics after a release.
+- [Hosting options for Vercel builds](docs/hosting-options.md) — side-by-side comparison of Vercel, Cloudflare, Render, AWS Amplify, and Fly.io for this Next.js build.
 
 ## Pages
 - `/` Home — one-button flow + **Finish Session**, greeting voice, on-screen log.

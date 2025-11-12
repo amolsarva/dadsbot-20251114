@@ -20,7 +20,7 @@ Use this walkthrough to confirm the Supabase credentials that power uploads from
    SUPABASE_ANON_KEY <anon-key-if-needed>
    ```
 
-4. Store `tmpkeys.txt` securely (1Password, Netlify env vars, etc.) and point the `TMP_KEYS_PATH` environment variable at it during builds.
+4. Store `tmpkeys.txt` securely (1Password, Vercel env vars, etc.) and point the `TMP_KEYS_PATH` environment variable at it during builds.
 
 ## 3. Deploy and validate
 1. Redeploy the site after updating secrets.
