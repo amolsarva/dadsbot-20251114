@@ -164,6 +164,13 @@ function inlineAwareLabel(label: string, value: string | undefined | null) {
   return `${label}: ${value}`
 }
 
+function normalizeUploadedAtString(value: string | undefined) {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value
+  }
+  return undefined
+}
+
 function safeDateString(value: string | undefined) {
   if (!value) return undefined
   const parsed = new Date(value)
@@ -365,13 +372,7 @@ async function ensurePrimerLoadedFromStorage(handle?: string | null) {
       const text = await resp.text()
       state.text = text
       state.url = url
-      state.updatedAt = safeDateString(
-        primerBlob.uploadedAt instanceof Date
-          ? primerBlob.uploadedAt.toISOString()
-          : typeof primerBlob.uploadedAt === 'string'
-          ? primerBlob.uploadedAt
-          : undefined,
-      )
+      state.updatedAt = safeDateString(normalizeUploadedAtString(primerBlob.uploadedAt))
     } catch (err) {
       const blobDetails = err && typeof err === 'object' ? (err as any).blobDetails : undefined
       logDataError('memory-primer:load:error', err, {
@@ -401,12 +402,7 @@ async function hydrateSessionsFromBlobs() {
         if (!resp.ok) continue
         const data = await resp.json()
         const fallbackId = manifest.pathname.replace(/^sessions\//, '').split('/')[0] || data?.sessionId
-        const uploadedAt =
-          manifest.uploadedAt instanceof Date
-            ? manifest.uploadedAt.toISOString()
-            : typeof manifest.uploadedAt === 'string'
-            ? manifest.uploadedAt
-            : undefined
+        const uploadedAt = normalizeUploadedAtString(manifest.uploadedAt)
         const storedId = rememberSessionManifest(data, fallbackId, uploadedAt, url)
         if (storedId) continue
         if (fallbackId && mem.sessions.has(fallbackId)) continue
@@ -1291,12 +1287,7 @@ async function fetchSessionManifest(sessionId: string): Promise<ManifestLookup |
     const data = await resp.json()
     return {
       id: (typeof data?.sessionId === 'string' && data.sessionId) || sessionId,
-      uploadedAt:
-        manifest.uploadedAt instanceof Date
-          ? manifest.uploadedAt.toISOString()
-          : typeof manifest.uploadedAt === 'string'
-          ? manifest.uploadedAt
-          : undefined,
+      uploadedAt: normalizeUploadedAtString(manifest.uploadedAt),
       url,
       data,
     }

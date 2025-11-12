@@ -117,7 +117,7 @@ function ensureCache(): SecretsCache {
 
 type SerializeError = ReturnType<typeof serializeError>
 
-function serializeError(error: unknown) {
+function serializeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
       name: error.name,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBlobEnvironment, listBlobs, primeStorageContextFromHeaders } from '@/lib/blob'
+import { createDiagnosticLogger, serializeError } from '@/lib/logging'
 
 type HistoryEntry = {
   sessionId: string
@@ -11,20 +12,53 @@ type HistoryEntry = {
   allTurns?: { turn: number; audio: string | null; manifest: string; transcript: string }[]
 }
 
+const log = createDiagnosticLogger('history:route')
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function resolveUploadedAt(value: string | undefined) {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value
+  }
+  const fallback = nowIso()
+  log('error', 'uploaded-at:fallback', { provided: value ?? null, fallback })
+  return fallback
+}
+
 export async function GET(req: NextRequest) {
   primeStorageContextFromHeaders(req.headers)
+  log('log', 'request:received', { url: req.url })
   try {
     const storageEnv = getBlobEnvironment()
+    log('log', 'storage:environment', { configured: storageEnv.configured })
     if (!storageEnv.configured) {
-      return NextResponse.json({ items: [] })
+      const payload = { reason: 'storage-not-configured' }
+      log('error', 'storage:unconfigured', payload)
+      return NextResponse.json({ items: [], error: payload.reason }, { status: 503 })
     }
 
     const url = new URL(req.url)
-    const page = Number(url.searchParams.get('page') || '1')
-    const limit = Number(url.searchParams.get('limit') || '10')
+    const pageRaw = url.searchParams.get('page') || '1'
+    const limitRaw = url.searchParams.get('limit') || '10'
+    log('log', 'pagination:raw', { pageRaw, limitRaw })
+    const page = Number(pageRaw)
+    const limit = Number(limitRaw)
+    if (!Number.isFinite(page) || !Number.isFinite(limit)) {
+      const error = new Error('Invalid pagination parameters')
+      log('error', 'pagination:invalid', {
+        pageRaw,
+        limitRaw,
+        error: serializeError(error),
+      })
+      throw error
+    }
 
     const prefix = 'sessions/'
+    log('log', 'blobs:list:start', { prefix })
     const { blobs } = await listBlobs({ prefix, limit: 2000 })
+    log('log', 'blobs:list:complete', { count: blobs.length })
     const sessions = new Map<string, HistoryEntry>()
 
     for (const blob of blobs) {
@@ -43,12 +77,7 @@ export async function GET(req: NextRequest) {
           turns: [],
         } as HistoryEntry)
       if (/^turn-\d+\.json$/.test(name)) {
-        const uploadedAtValue =
-          blob.uploadedAt instanceof Date
-            ? blob.uploadedAt.toISOString()
-            : typeof blob.uploadedAt === 'string'
-            ? blob.uploadedAt
-            : new Date().toISOString()
+        const uploadedAtValue = resolveUploadedAt(blob.uploadedAt)
         const urlToUse = blob.downloadUrl || blob.url
         if (!urlToUse) continue
         entry.turns.push({ url: urlToUse, uploadedAt: uploadedAtValue, name })
@@ -73,7 +102,18 @@ export async function GET(req: NextRequest) {
       const allTurns: HistoryEntry['allTurns'] = []
       for (const turn of entry.turns) {
         try {
+          log('log', 'turn:fetch:start', { turnUrl: turn.url })
           const resp = await fetch(turn.url)
+          if (!resp.ok) {
+            const error = new Error(`Failed to fetch turn manifest: ${resp.status}`)
+            log('error', 'turn:fetch:http-error', {
+              turnUrl: turn.url,
+              status: resp.status,
+              statusText: resp.statusText,
+              error: serializeError(error),
+            })
+            throw error
+          }
           const json = await resp.json()
           allTurns.push({
             turn: Number(json.turn) || 0,
@@ -81,8 +121,12 @@ export async function GET(req: NextRequest) {
             manifest: turn.url,
             transcript: typeof json.transcript === 'string' ? json.transcript : '',
           })
-        } catch {
-          // ignore failures per legacy behavior
+          log('log', 'turn:fetch:complete', { turnUrl: turn.url })
+        } catch (error) {
+          log('error', 'turn:fetch:failed', {
+            turnUrl: turn.url,
+            error: serializeError(error),
+          })
         }
       }
       entry.allTurns = allTurns
@@ -94,8 +138,13 @@ export async function GET(req: NextRequest) {
       items.push(await enrich(entry))
     }
 
+    log('log', 'response:success', { itemCount: items.length })
     return NextResponse.json({ items })
-  } catch (e) {
-    return NextResponse.json({ items: [] })
+  } catch (error) {
+    log('error', 'response:failure', { error: serializeError(error) })
+    return NextResponse.json(
+      { items: [], error: 'history-route-failure', detail: serializeError(error) },
+      { status: 500 },
+    )
   }
 }

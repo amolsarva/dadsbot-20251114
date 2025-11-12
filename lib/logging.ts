@@ -1,6 +1,6 @@
 export type DiagnosticLevel = 'log' | 'error'
 
-export function serializeError(error: unknown) {
+export function serializeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
       name: error.name,
