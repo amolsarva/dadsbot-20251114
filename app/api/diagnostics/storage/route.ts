@@ -10,7 +10,7 @@ const ROUTE_NAME = 'app/api/diagnostics/storage'
 const log = createDiagnosticLogger('diagnostics:storage')
 
 const HYPOTHESES = [
-  'Supabase storage credentials may be missing from tmpkeys.txt.',
+  'Supabase storage credentials may be missing from environment variables.',
   'Bucket permissions could block read/write probes.',
   'Fallback memory mode may be active, limiting persistence.',
 ]

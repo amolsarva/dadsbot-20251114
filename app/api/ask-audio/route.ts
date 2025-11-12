@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (!provider) {
-    const message = 'No provider was supplied. Set the provider query parameter or PROVIDER entry in tmpkeys.txt.'
+    const message = 'No provider was supplied. Set the provider query parameter or configure the PROVIDER environment variable.'
     logDiagnostic('error', 'ask-audio:provider:missing', { message })
     return NextResponse.json({ ok: false, error: 'missing_provider', message }, { status: 500 })
   }

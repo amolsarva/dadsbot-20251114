@@ -18,13 +18,14 @@ function envSummary() {
   const supabaseUrl = getSecret('SUPABASE_URL')
   const supabaseBucket = getSecret('SUPABASE_STORAGE_BUCKET')
   return {
-    deployId: process.env.NETLIFY_DEPLOY_ID ?? process.env.DEPLOY_ID ?? null,
+    deployId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.DEPLOY_ID ?? null,
     storageMode,
     supabaseUrl: supabaseUrl ? `${supabaseUrl.slice(0, 8)}… (${supabaseUrl.length} chars)` : null,
     supabaseBucket: supabaseBucket ?? null,
     hasOpenAI: Boolean(getSecret('OPENAI_API_KEY')),
     hasResend: Boolean(getSecret('RESEND_API_KEY')),
     nodeEnv: process.env.NODE_ENV ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
   }
 }
 
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
   })
 
   logDiagnostic('log', 'deploy-env:probe', {
-    deployId: process.env.NETLIFY_DEPLOY_ID ?? process.env.DEPLOY_ID ?? null,
+    deployId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.DEPLOY_ID ?? null,
   })
 
   try {

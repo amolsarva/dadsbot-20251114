@@ -14,9 +14,9 @@ function log(level: 'log' | 'error', step: string, payload: Record<string, unkno
 }
 
 const hypotheses = [
-  'DEFAULT_NOTIFY_EMAIL may be unset in tmpkeys.txt for this deployment.',
+  'DEFAULT_NOTIFY_EMAIL may be unset in environment variables for this deployment.',
   'DEFAULT_NOTIFY_EMAIL could still be using a placeholder fallback.',
-  'Whitespace in tmpkeys.txt might trim to an empty string after parsing.',
+  'Whitespace in the configured environment variable might trim to an empty string after parsing.',
 ]
 
 export function resolveDefaultNotifyEmailServer(): string {

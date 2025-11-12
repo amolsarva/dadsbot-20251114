@@ -45,7 +45,7 @@ type SessionEntry = StoredSession & {
 
 function ensureStorageConfigured() {
   const env = getBlobEnvironment()
-  if (!env.configured) throw new Error('Netlify blob storage is not configured')
+  if (!env.configured) throw new Error('Blob storage is not configured for this deployment')
   return env
 }
 

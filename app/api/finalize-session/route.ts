@@ -427,7 +427,8 @@ function envSummary() {
   const supabaseBucket = getSecret('SUPABASE_STORAGE_BUCKET')
   const supabaseUrl = getSecret('SUPABASE_URL')
   return {
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     storageMode,
     supabaseBucket: supabaseBucket ?? null,
     supabaseUrl: supabaseUrl ? `${supabaseUrl.slice(0, 8)}… (${supabaseUrl.length} chars)` : null,

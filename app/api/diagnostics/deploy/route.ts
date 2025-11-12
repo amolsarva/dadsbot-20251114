@@ -8,7 +8,8 @@ const formatTimestamp = () => new Date().toISOString()
 const envSummary = () => ({
   totalKeys: Object.keys(process.env).length,
   nodeEnv: process.env.NODE_ENV ?? null,
-  platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
+  platform: process.env.VERCEL ? 'vercel' : 'custom',
+  vercelEnv: process.env.VERCEL_ENV ?? null,
 })
 
 const logStep = (step: string, payload?: Record<string, unknown>) => {
@@ -30,7 +31,7 @@ const logError = (step: string, error: unknown, payload?: Record<string, unknown
 const HYPOTHESES = [
   'Deploy ID variables were not exported into the runtime environment.',
   'Deployment metadata helper is not wired to diagnostics route.',
-  'Netlify build metadata is incomplete so blobs cannot attribute writes correctly.',
+  'Vercel deployment metadata is incomplete so blobs cannot attribute writes correctly.',
 ]
 
 export async function GET() {
@@ -42,11 +43,10 @@ export async function GET() {
     const responsePayload = {
       deployId: metadata.deployId,
       deployIdSource: metadata.deployIdSource,
-      context: metadata.context,
-      siteId: metadata.siteId,
-      siteName: metadata.siteName,
+      environment: metadata.environment,
+      projectId: metadata.projectId,
+      orgId: metadata.orgId,
       deployUrl: metadata.deployUrl,
-      deployPrimeUrl: metadata.deployPrimeUrl,
       branch: metadata.branch,
       commitRef: metadata.commitRef,
       repo: metadata.repo,

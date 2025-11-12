@@ -27,7 +27,8 @@ export function createDiagnosticLogger(namespace: string) {
     const entry = {
       ...(payload ?? {}),
       env: {
-        netlify: process.env.NETLIFY ?? null,
+        vercel: process.env.VERCEL ?? null,
+        vercelEnv: process.env.VERCEL_ENV ?? null,
         nodeEnv: process.env.NODE_ENV ?? null,
       },
     }

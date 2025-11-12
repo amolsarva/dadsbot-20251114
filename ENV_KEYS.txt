@@ -1,5 +1,5 @@
 
-Provision these environment variables (or `tmpkeys.txt` entries) for production deployments:
+Provision these environment variables (configure them in Vercel for production deployments):
 - STORAGE_MODE: set to `supabase` to enable persistent storage (falls back to `memory` for local tests).
 - SUPABASE_URL: the Supabase project URL from Project Settings → API.
 - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key for authenticated storage access.

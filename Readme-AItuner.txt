@@ -14,7 +14,7 @@ Keep invariant:
   GET  /api/health → { ok, env, blob, db }
   POST /api/diagnostics/smoke → { ok, sessionId, artifacts, emailed }
 - Adapters depend on configured envs:
-  Blob → Netlify store; Email → Resend when enabled; AI → provider keys required.
+  Blob → Supabase store (credentials from Vercel env vars); Email → Resend when enabled; AI → provider keys required.
 - UI behaviors to preserve:
   Greeting voice on Home (SpeechSynthesis).
   On-screen log on Home.
@@ -24,5 +24,5 @@ Keep invariant:
   README must match behavior; include .env.local.example. No new routes without updating README & Diagnostics.
 
 Deliver:
-- A single zip drop-in that compiles with Next 14, uses Netlify-managed envs, and preserves everything above.
+- A single zip drop-in that compiles with Next 14, uses Vercel-managed envs, and preserves everything above.
 - Do not remove Diagnostics or the on-screen log.

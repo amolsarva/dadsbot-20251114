@@ -3,7 +3,7 @@ Dad's Interview Bot — Code Walkthrough & Deployment Notes
 
 Project purpose & fit with the README
 ------------------------------------
-- The README positions the app as a Netlify-hosted interviewer that captures oral histories with automatic transcription, AI-generated follow ups, and session finalization with email recaps. The codebase directly reflects that: the Next.js `app/` tree implements the multi-view UI (`page.tsx`, `history`, `settings`, `diagnostics`), while the `/api` routes orchestrate recording, AI prompting, and archival storage. Supporting libraries in `lib/` mirror the README sections (memory primer engine, fallback copy, diagnostics helpers, etc.).
+- The README positions the app as a Vercel-hosted interviewer that captures oral histories with automatic transcription, AI-generated follow ups, and session finalization with email recaps. The codebase directly reflects that: the Next.js `app/` tree implements the multi-view UI (`page.tsx`, `history`, `settings`, `diagnostics`), while the `/api` routes orchestrate recording, AI prompting, and archival storage. Supporting libraries in `lib/` mirror the README sections (memory primer engine, fallback copy, diagnostics helpers, etc.).
 - A legacy Vite prototype still lives in `src/`, but nothing in `app/` imports it. The deployed Next.js build is the production path.
 
 Failure hypotheses to verify during debugging
@@ -12,7 +12,7 @@ Failure hypotheses to verify during debugging
 2. **Missing default notification email.** `lib/default-notify-email.server.ts` throws if `DEFAULT_NOTIFY_EMAIL` is absent or uses the placeholder stub. Finalization and health checks depend on this, so deploys will hard-stop.
 3. **Unprovisioned AI credentials.** Both `/api/ask-audio` and `/api/session/[id]/intro` expect `GOOGLE_API_KEY` + `GOOGLE_MODEL`. Without them, Google calls fail and the handlers fall back to curated prompts only. `/api/diagnostics/google` exposes this quickly.
 4. **Email provider unset.** `lib/email.ts` requires `MAIL_FROM` and a provider key (`RESEND_API_KEY` or `SENDGRID_API_KEY`). If absent, finalize returns `emailed: false` and surfaces theory-4 fox flags.
-5. **`tmpkeys.txt` missing.** The repository does not ship a `tmpkeys.txt` bundle. Any plan to bake credentials into the binary must add that file at build time or adjust the build step accordingly; otherwise the runtime still relies on environment variables.
+5. **Environment variables missing.** The repository relies on environment variables (for example, those configured in Vercel project settings) for all secrets. Ensure required keys exist before building or the runtime will abort during initialization.
 
 High-level execution flow
 -------------------------
@@ -25,7 +25,7 @@ High-level execution flow
 
 Key modules & their roles
 -------------------------
-- `lib/blob.ts` & `utils/blob-env.ts`: resolve Supabase configuration, track required tmpkeys, normalize API requests, and provide `listBlobs`, `putBlobFromBuffer`, `deleteBlobsByPrefix`, etc. They emit structured diagnostics whenever configuration or API calls fail.
+- `lib/blob.ts` & `utils/blob-env.ts`: resolve Supabase configuration, track required environment variables, normalize API requests, and provide `listBlobs`, `putBlobFromBuffer`, `deleteBlobsByPrefix`, etc. They emit structured diagnostics whenever configuration or API calls fail.
 - `lib/data.ts`: in-memory session store, primer builder, session manifest generation, deletion workflows, and summary email triggers. Provides health checks (`dbHealth`) and memory snapshot APIs for server routes.
 - `lib/email.ts`: wraps Resend and SendGrid with environment validation. Honors the `ENABLE_SESSION_EMAILS` flag and masks email logs.
 - `lib/google.ts`: model normalization and enforcement for Google Gemini / Vertex AI family names. Throws if no valid model is supplied.
@@ -33,12 +33,12 @@ Key modules & their roles
 - `lib/default-notify-email.*`: ensures a production email is injected both server-side and into the client bootstrap script for UI references.
 - `lib/foxes.ts` (not shown in detail): collects “fox” diagnostic events that flag theories for operators (e.g., missing transcripts, email failures).
 - `app/api/*`: route handlers for recording (`ask-audio`, `save-turn`, `save-session-audio`), session lifecycle (`session/start`, `session/[id]/intro`, `finalize-session`), diagnostics, blob proxying (`blob/[...path]`), and history retrieval.
-- `docs/`: reference prompts (`interview-guide.md`), fallback copy, the Netlify/Supabase migration guide, and hosting comparisons referenced throughout the code.
+- `docs/`: reference prompts (`interview-guide.md`), fallback copy, Supabase configuration notes, and other supporting material referenced throughout the code.
 
 Third-party dependencies & external services
 --------------------------------------------
-- **Netlify:** primary host and deployment metadata source. `netlify.toml` configures edge/runtime options and diagnostics read Netlify-specific headers.
-- **Supabase:** storage provider reached through REST calls inside `lib/blob.ts` with credentials sourced from `tmpkeys.txt`.
+- **Vercel:** primary host and deployment metadata source. Environment variables surfaced by Vercel drive deploy IDs, environment context, and diagnostics summaries.
+- **Supabase:** storage provider reached through REST calls inside `lib/blob.ts` with credentials sourced from environment variables.
 - **Google Gemini (Vertex AI):** main conversational AI via REST fetches inside `/api/ask-audio` and `/api/session/[id]/intro` with models resolved by `lib/google.ts`.
 - **OpenAI:** optional TTS via `lib/openaiTts.ts` and diagnostics via `/api/diagnostics/openai` (for verifying keys/models).
 - **Resend / SendGrid:** outbound email for session recaps (`lib/email.ts`).
@@ -46,10 +46,10 @@ Third-party dependencies & external services
 
 Does the implementation work?
 -----------------------------
-- Core flows (record → AI reply → finalize → email) are fully implemented and match the README’s “Experience map.” Provided the required environment variables are set in `tmpkeys.txt`, the Next.js app should run on Netlify with Supabase persistence, AI prompting, and email summaries.
+- Core flows (record → AI reply → finalize → email) are fully implemented and match the README’s “Experience map.” Provided the required environment variables are configured (for example in Vercel), the Next.js app runs with Supabase persistence, AI prompting, and email summaries.
 - Diagnostics tooling is extensive: fox theory tracking, env inspectors, blob explorers, deploy metadata bootstrap, and localStorage mirrors give operators clear insight post-deploy.
-- The absence of `tmpkeys.txt` means secrets still come from the environment today. To embed credentials into the binary, create that file with `KEY=VALUE` pairs before building or extend the build script to transform it into `process.env` at compile time.
-- Unit/e2e tests exist (`tests/`, `playwright.config.ts`), but the user requested no local runs. Rely on Netlify deploy previews to validate.
+- Secrets are injected via environment variables today. To embed credentials into the binary, update the build step to inline them explicitly before compiling or use a secure secret management approach.
+- Unit/e2e tests exist (`tests/`, `playwright.config.ts`), but the user requested no local runs. Use Vercel preview deployments to validate.
 
 Potential deployment blockers & mitigations
 -------------------------------------------

@@ -1,25 +1,31 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const tmpKeysPath = path.join(process.cwd(), 'tmpkeys.txt')
+const originalEnv = { ...process.env }
 
-function writeSecrets(contents: string) {
-  fs.writeFileSync(tmpKeysPath, contents, 'utf8')
+function restoreEnv() {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
+      delete process.env[key]
+    }
+  }
+  for (const [key, value] of Object.entries(originalEnv)) {
+    if (typeof value === 'string') {
+      process.env[key] = value
+    } else {
+      delete process.env[key]
+    }
+  }
 }
 
 afterEach(() => {
+  restoreEnv()
   vi.resetModules()
   vi.restoreAllMocks()
-  if (fs.existsSync(tmpKeysPath)) {
-    fs.unlinkSync(tmpKeysPath)
-  }
 })
 
 describe('blob storage in memory mode', () => {
   beforeEach(() => {
-    writeSecrets(`STORAGE_MODE=memory\n`)
+    process.env.STORAGE_MODE = 'memory'
   })
 
   it('stores and lists blobs in memory', async () => {
@@ -47,14 +53,10 @@ describe('blob storage in supabase mode', () => {
   const fetchSpy = vi.fn()
 
   beforeEach(() => {
-    writeSecrets(
-      [
-        'STORAGE_MODE=supabase',
-        'SUPABASE_URL=https://example.supabase.co',
-        'SUPABASE_SERVICE_ROLE_KEY=service-role-key',
-        'SUPABASE_STORAGE_BUCKET=artifacts',
-      ].join('\n') + '\n',
-    )
+    process.env.STORAGE_MODE = 'supabase'
+    process.env.SUPABASE_URL = 'https://example.supabase.co'
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key'
+    process.env.SUPABASE_STORAGE_BUCKET = 'artifacts'
 
     fetchSpy.mockImplementation(async (input: RequestInfo, init?: RequestInit) => {
       const method = init?.method ?? 'GET'

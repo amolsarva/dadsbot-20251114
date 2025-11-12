@@ -13,7 +13,7 @@ Conversation flow: detect TTS playback failures and surface a retry/continue con
 Conversation flow: add heartbeat timeout that finalizes or retries a turn if no "finalized" event arrives within N seconds
 Conversation flow: log per-turn state transitions and expose them in diagnostics so stuck turns can be diagnosed post-mortem
 Reinstate graceful end-intent handling with recap prompt
-Document Netlify blob provisioning and rotate access tokens routinely
+Document Vercel environment provisioning for Supabase and rotate access tokens routinely
 Add email delivery via Resend/SendGrid with proper API keys
 History page: show per-turn audio and transcripts, support playback
 Resume from last session: seed opening with recap of last transcript

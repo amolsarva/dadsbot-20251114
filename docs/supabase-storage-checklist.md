@@ -10,22 +10,22 @@ Use this walkthrough to confirm the Supabase credentials that power uploads from
 ## 2. Capture required credentials
 1. From **Project Settings → API**, copy the **service_role** key. The runtime refuses to initialize Supabase storage without it.
 2. Optional: copy the **anon** key if any client-side components need to talk to Supabase directly.
-3. Update your `tmpkeys.txt` so it contains:
+3. In Vercel, open **Project Settings → Environment Variables** and add:
 
-   ```
-   STORAGE_MODE supabase
-   SUPABASE_URL https://<project>.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY <service_role>
-   SUPABASE_STORAGE_BUCKET dadsbot-sessions
-   SUPABASE_ANON_KEY <anon-key-if-needed>
-   ```
+   | Key | Value |
+   | --- | --- |
+   | `STORAGE_MODE` | `supabase` |
+   | `SUPABASE_URL` | `https://<project>.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | `<service_role>` |
+   | `SUPABASE_STORAGE_BUCKET` | `dadsbot-sessions` |
+   | `SUPABASE_ANON_KEY` | `<anon-key-if-needed>` |
 
-4. Store `tmpkeys.txt` securely (1Password, Netlify env vars, etc.) and point the `TMP_KEYS_PATH` environment variable at it during builds.
+4. Save the variables for the **Production** and **Preview** environments so every deployment receives the same credentials.
 
 ## 3. Deploy and validate
 1. Redeploy the site after updating secrets.
 2. Visit `/api/diagnostics/storage` or the `/diagnostics` page. Storage should report `provider: "supabase"`, include your bucket name, and confirm health probes succeeded.
-3. If diagnostics show `mode: "memory"`, the runtime could not read `tmpkeys.txt`. Check the deployment logs for `[diagnostic] storage:environment:failed` entries.
+3. If diagnostics show `mode: "memory"`, the runtime could not read the Supabase environment variables. Check the deployment logs for `[diagnostic] storage:environment:failed` entries and confirm Vercel propagated the latest secrets.
 
 ## 4. Test uploads end-to-end
 1. Record a short session in the deployed app.
@@ -34,10 +34,10 @@ Use this walkthrough to confirm the Supabase credentials that power uploads from
 
 ## 5. Rotate keys safely
 1. Generate a new service role key in Supabase.
-2. Update the entry in `tmpkeys.txt` (or your secret manager) and redeploy.
+2. Update the value in the Vercel project settings (or your secret manager) and redeploy.
 3. After the redeploy succeeds, revoke the old key in Supabase.
 
 ## Troubleshooting quick hits
 - **Storage still in memory** → confirm `STORAGE_MODE` is set to `supabase` and that the runtime log includes a successful `supabase:init` entry.
 - **Uploads fail with 401/403** → the service role key may be incorrect or revoked. Check `/api/diagnostics/storage` for the exact error payload.
-- **Objects appear but URLs 404** → ensure the proxy base override (`PUBLIC_STORAGE_BASE_URL` in `tmpkeys.txt`) points to a public CDN or use the built-in `/api/blob/` proxy paths.
+- **Objects appear but URLs 404** → ensure the proxy base override (`PUBLIC_STORAGE_BASE_URL` environment variable) points to a public CDN or use the built-in `/api/blob/` proxy paths.

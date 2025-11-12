@@ -23,10 +23,6 @@
 - **UI copy & styling:** `app/page.tsx`, `app/globals.css`, and `app/layout.tsx` (footer commit/time metadata for continuity-first builds).
 - **Automation scripts:** `scripts/extract-fallback-copy.mjs` (sync helper) and `scripts/` utilities for blob inspection.
 
-## Hosting migration resources
-- [Netlify migration checklist](docs/netlify-migration-guide.md) — step-by-step instructions for wiring Supabase storage, Netlify deploy settings, and diagnostics after a release.
-- [Hosting options for Netlify builds](docs/hosting-options.md) — side-by-side comparison of Netlify, Cloudflare, Render, AWS Amplify, and Fly.io for this Next.js build.
-
 ## Pages
 - `/` Home — one-button flow + **Finish Session**, greeting voice, on-screen log.
 - `/history`, `/session/[id]`, `/settings`
@@ -43,12 +39,12 @@
 ## Diagnostics & operator tooling
 - **Diagnostics dashboard:** `/diagnostics` shows recent health checks, captured provider failures, and links to localStorage payloads (`DIAGNOSTIC_TRANSCRIPT_STORAGE_KEY`, `DIAGNOSTIC_PROVIDER_ERROR_STORAGE_KEY`).
 - **Logs:** the home panel card mirrors the most recent state transitions for quick triage. Browser storage keeps the rolling log per handle.
-- **Blob helpers:** `app/api/blob/[...path]` exposes inline blob contents via the Supabase proxy credentials loaded from `tmpkeys.txt`.
+- **Blob helpers:** `app/api/blob/[...path]` exposes inline blob contents via the Supabase proxy credentials supplied through environment variables.
 - **Commit stamp:** the footer (see `app/layout.tsx`) links to the active commit and renders the timestamp in US Eastern Time for release tracking.
 - **Memory Log review:** use the Supabase dashboard (Storage → Buckets) or CLI to inspect per-session manifests under `sessions/<SESSION_ID>/` and primers at `memory/primers/<HANDLE>.md`.
 
 ## Deployment & runtime notes
-- **Supabase-first storage:** configure `STORAGE_MODE=supabase` alongside Supabase URL, bucket, and service role key in `tmpkeys.txt`.
+- **Supabase-first storage:** configure `STORAGE_MODE=supabase` alongside Supabase URL, bucket, and service role key via your Vercel environment variables.
 - **Providers:** Google Gemini is the default; set `GOOGLE_API_KEY` and `GOOGLE_MODEL` for production. TTS falls back to the browser if `/api/tts` cannot return media.
 - **Session storage:** manifests and transcripts stream to Supabase Storage using the configured bucket and service role key.
 - **Handles:** normalised via `lib/user-scope.ts` to keep blob paths, localStorage keys, and URLs aligned.

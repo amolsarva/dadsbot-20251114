@@ -1,11 +1,8 @@
-import fs from 'fs'
-import path from 'path'
-
 export type SecretAccessLevel = 'optional' | 'required'
 
 type SecretsCache = {
   loadedAt: string
-  path: string
+  source: string
   values: Map<string, string>
   raw: Record<string, string>
 }
@@ -18,9 +15,11 @@ function timestamp() {
 
 function envSummary() {
   return {
-    netlify: process.env.NETLIFY ?? null,
+    platform: process.env.VERCEL ? 'vercel' : 'custom',
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     nodeEnv: process.env.NODE_ENV ?? null,
-    tmpKeysPath: cache?.path ?? resolveSecretsPath(),
+    totalLoaded: cache?.values.size ?? 0,
+    source: cache?.source ?? 'process.env',
   }
 }
 
@@ -38,68 +37,29 @@ function logSecrets(level: LogLevel, step: string, payload: LogPayload = {}) {
   }
 }
 
-function resolveSecretsPath() {
-  const explicit = process.env.TMP_KEYS_PATH
-  if (explicit && explicit.trim()) {
-    return path.resolve(explicit.trim())
-  }
-  return path.resolve(process.cwd(), 'tmpkeys.txt')
-}
-
-type ParseResult = {
-  values: Map<string, string>
-  raw: Record<string, string>
-}
-
 function normalizeKey(input: string) {
   return input.trim().replace(/\s+/g, '_').toUpperCase()
 }
 
-function parseSecrets(contents: string): ParseResult {
+function loadSecrets(): SecretsCache {
+  logSecrets('log', 'load:start', { totalEnvKeys: Object.keys(process.env).length })
   const values = new Map<string, string>()
   const raw: Record<string, string> = {}
-  const lines = contents.split(/\r?\n/)
-  lines.forEach((line, index) => {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) {
-      return
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value !== 'string') {
+      continue
     }
-    const match = trimmed.match(/([^:=\s]+)\s*[:=]?\s*(.+)?$/)
-    if (!match) {
-      logSecrets('error', 'parse:invalid-line', { line: trimmed, index })
-      throw new Error(`Invalid entry in tmpkeys.txt on line ${index + 1}: "${trimmed}"`)
+    const normalized = normalizeKey(key)
+    const trimmedValue = value.trim()
+    if (!trimmedValue.length) {
+      continue
     }
-    const key = normalizeKey(match[1])
-    const value = (match[2] ?? '').trim()
-    if (!key || !value) {
-      logSecrets('error', 'parse:missing-value', { key, index })
-      throw new Error(`Missing value for ${key} in tmpkeys.txt on line ${index + 1}`)
-    }
-    values.set(key, value)
-    raw[key] = value
-  })
-  return { values, raw }
-}
-
-function loadSecrets(): SecretsCache {
-  const resolvedPath = resolveSecretsPath()
-  logSecrets('log', 'load:start', { path: resolvedPath })
-  let contents: string
-  try {
-    contents = fs.readFileSync(resolvedPath, 'utf8')
-  } catch (error) {
-    logSecrets('error', 'load:failed', {
-      path: resolvedPath,
-      error: serializeError(error),
-    })
-    throw new Error(
-      `Unable to read tmpkeys.txt at ${resolvedPath}. Ensure the file exists with KEY=value entries before starting the server.`,
-    )
+    values.set(normalized, trimmedValue)
+    raw[normalized] = trimmedValue
   }
-  const { values, raw } = parseSecrets(contents)
   const loaded: SecretsCache = {
     loadedAt: timestamp(),
-    path: resolvedPath,
+    source: 'process.env',
     values,
     raw,
   }
@@ -113,30 +73,6 @@ function ensureCache(): SecretsCache {
     return cache
   }
   return loadSecrets()
-}
-
-type SerializeError = ReturnType<typeof serializeError>
-
-function serializeError(error: unknown): Record<string, unknown> {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause instanceof Error ? serializeError(error.cause) : error.cause ?? null,
-    }
-  }
-  if (error && typeof error === 'object') {
-    try {
-      return JSON.parse(JSON.stringify(error))
-    } catch {
-      return { ...error }
-    }
-  }
-  if (typeof error === 'string') {
-    return { message: error }
-  }
-  return { message: 'Unknown error', value: error }
 }
 
 function lookupSecret(key: string) {
@@ -159,7 +95,7 @@ export function requireSecret(key: string): string {
   const value = lookupSecret(key)
   if (!value) {
     logSecrets('error', 'lookup:missing', { key })
-    throw new Error(`Missing required secret ${key}. Add it to tmpkeys.txt before deploying.`)
+    throw new Error(`Missing required secret ${key}. Provide it via environment variables before deploying.`)
   }
   return value
 }
@@ -172,7 +108,7 @@ export function getSecretsSnapshot() {
   }
   return {
     loadedAt: state.loadedAt,
-    path: state.path,
+    source: state.source,
     keys: Array.from(state.values.keys()),
     summary,
   }

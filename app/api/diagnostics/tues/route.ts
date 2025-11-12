@@ -40,7 +40,8 @@ function timestamp(): string {
 function envSnapshot() {
   return {
     nodeEnv: process.env.NODE_ENV ?? null,
-    netlify: process.env.NETLIFY ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     region: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? null,
     functionName: process.env.AWS_LAMBDA_FUNCTION_NAME ?? null,
   }
@@ -62,7 +63,7 @@ function ensureEnv(key: RequiredKey): string {
     throw new Error(`${key} is required for the TUES diagnostic and was not provided`)
   }
   if (PLACEHOLDER_PATTERN.test(value)) {
-    throw new Error(`${key} is using a placeholder value (${value}). Set a real credential in Netlify before running.`)
+    throw new Error(`${key} is using a placeholder value (${value}). Set a real credential in your deployment environment before running.`)
   }
   return value.trim()
 }
@@ -73,7 +74,7 @@ function readOptionalEnv(key: OptionalKey): string | null {
     return null
   }
   if (PLACEHOLDER_PATTERN.test(raw)) {
-    throw new Error(`${key} is using a placeholder value (${raw}). Update the Netlify environment configuration.`)
+    throw new Error(`${key} is using a placeholder value (${raw}). Update the deployment environment configuration.`)
   }
   return raw.trim()
 }

@@ -47,7 +47,8 @@ const formatTimestamp = () => new Date().toISOString()
 const envSummary = () => ({
   totalKeys: Object.keys(process.env).length,
   nodeEnv: process.env.NODE_ENV ?? null,
-  platform: process.env.NETLIFY === 'true' ? 'netlify' : 'custom',
+  platform: process.env.VERCEL ? 'vercel' : 'custom',
+  vercelEnv: process.env.VERCEL_ENV ?? null,
 })
 
 function logStep(step: string, payload?: Record<string, unknown>) {
@@ -76,12 +77,12 @@ const GROUPS: EnvGroup[] = [
     checks: [
       {
         key: 'STORAGE_MODE',
-        label: 'Storage mode (tmpkeys)',
+        label: 'Storage mode (environment)',
         required: true,
         validate: () => {
           const mode = getSecret('STORAGE_MODE')
           if (!mode) {
-            return fail('STORAGE_MODE missing from tmpkeys.txt; storage cannot initialize.', true)
+            return fail('STORAGE_MODE missing from environment; storage cannot initialize.', true)
           }
           const normalized = mode.trim().toLowerCase()
           if (normalized === 'supabase') {
@@ -100,7 +101,7 @@ const GROUPS: EnvGroup[] = [
         validate: () => {
           const url = getSecret('SUPABASE_URL')
           if (!url) {
-            return fail('SUPABASE_URL missing from tmpkeys.txt; cannot reach storage API.', true)
+            return fail('SUPABASE_URL missing from environment; cannot reach storage API.', true)
           }
           return looksLikeURL(url)
             ? pass('Supabase URL detected.')
@@ -114,7 +115,7 @@ const GROUPS: EnvGroup[] = [
         validate: () => {
           const bucket = getSecret('SUPABASE_STORAGE_BUCKET')
           if (!bucket) {
-            return fail('SUPABASE_STORAGE_BUCKET missing from tmpkeys.txt.', true)
+            return fail('SUPABASE_STORAGE_BUCKET missing from environment.', true)
           }
           return pass(`Bucket "${bucket}" configured.`)
         },
@@ -126,7 +127,7 @@ const GROUPS: EnvGroup[] = [
         validate: () => {
           const key = getSecret('SUPABASE_SERVICE_ROLE_KEY')
           if (!key) {
-            return fail('SUPABASE_SERVICE_ROLE_KEY missing from tmpkeys.txt.', true)
+            return fail('SUPABASE_SERVICE_ROLE_KEY missing from environment.', true)
           }
           return key.length > 40
             ? pass(`Service role key length ${key.length} characters.`)
@@ -152,17 +153,59 @@ const GROUPS: EnvGroup[] = [
     cat: 'Platform / Deploy',
     checks: [
       {
-        key: 'NETLIFY',
-        label: 'NETLIFY runtime flag',
-        validate: (value) => (value ? pass() : warn('Unset; deployment platform detection will fallback to heuristic.')),
+        key: 'VERCEL',
+        label: 'Vercel runtime flag',
+        validate: (value) =>
+          value ? pass('Running on Vercel runtime.') : warn('Missing; assuming local or custom host.'),
       },
       {
-        key: 'NETLIFY_DEPLOY_ID',
-        label: 'Netlify deploy ID',
+        key: 'VERCEL_ENV',
+        label: 'Vercel environment',
         validate: (value) =>
           value
-            ? pass('Provided by Netlify runtime.')
+            ? pass(`Environment ${value}`)
+            : warn('VERCEL_ENV missing; previews and production may be indistinguishable.'),
+      },
+      {
+        key: 'VERCEL_DEPLOYMENT_ID',
+        label: 'Vercel deployment ID',
+        validate: (value) =>
+          value
+            ? pass('Provided by Vercel runtime.')
             : warn('Missing; local builds will generate a fallback deploy identifier.'),
+      },
+      {
+        key: 'VERCEL_PROJECT_ID',
+        label: 'Vercel project ID',
+        validate: (value) => (value ? pass('Project ID resolved.') : warn('Missing; update project settings to expose it.')),
+      },
+      {
+        key: 'VERCEL_ORG_ID',
+        label: 'Vercel org ID',
+        validate: (value) => (value ? pass('Org ID resolved.') : warn('Missing; update project settings to expose it.')),
+      },
+      {
+        key: 'VERCEL_URL',
+        label: 'Canonical deployment URL',
+        validate: (value) =>
+          value
+            ? (() => {
+                const normalized = value.includes('://') ? value : `https://${value}`
+                return looksLikeURL(normalized)
+                  ? pass(`Vercel URL ${normalized}`)
+                  : warn('Vercel URL present but format is unexpected; ensure it is a hostname or full URL.')
+              })()
+            : warn('Missing; add NEXT_PUBLIC_SITE_URL if you need canonical links.'),
+      },
+      {
+        key: 'VERCEL_BRANCH_URL',
+        label: 'Preview branch URL',
+        validate: (value) =>
+          value
+            ? looksLikeURL(value)
+              ? pass('Preview URL detected.')
+              : warn('Preview URL set but not an HTTP(S) URL.')
+            : warn('Missing; preview deployments will rely on VERCEL_URL instead.'),
       },
       {
         key: 'DEPLOY_ID',
@@ -330,19 +373,6 @@ const GROUPS: EnvGroup[] = [
         validate: (value) => (value ? pass(`SITE_ID=${value}`) : warn('SITE_ID missing; some logs cannot correlate to site.')),
       },
       {
-        key: 'NETLIFY_SITE_NAME',
-        label: 'Netlify site name',
-        validate: (value) =>
-          value
-            ? pass(`Site name ${value}.`)
-            : warn('NETLIFY_SITE_NAME missing; admin console links may not render.'),
-      },
-      {
-        key: 'CONTEXT',
-        label: 'Netlify build context',
-        validate: (value) => (value ? pass(`CONTEXT=${value}`) : warn('CONTEXT missing; Netlify build context unknown.')),
-      },
-      {
         key: 'DEPLOY_URL',
         label: 'Published deploy URL',
         validate: (value) =>
@@ -350,17 +380,7 @@ const GROUPS: EnvGroup[] = [
             ? looksLikeURL(value)
               ? pass('Deploy URL detected.')
               : fail('DEPLOY_URL should be a full URL starting with http(s)://', false)
-            : warn('DEPLOY_URL missing; production links may not resolve.'),
-      },
-      {
-        key: 'DEPLOY_PRIME_URL',
-        label: 'Preview deploy URL',
-        validate: (value) =>
-          value
-            ? looksLikeURL(value)
-              ? pass('Preview URL detected.')
-              : fail('DEPLOY_PRIME_URL should be a full URL starting with http(s)://', false)
-            : warn('DEPLOY_PRIME_URL missing; preview deploy link unavailable.'),
+            : warn('DEPLOY_URL missing; some hosts only expose VERCEL_URL/VERCEL_BRANCH_URL.'),
       },
       {
         key: 'URL',
@@ -376,6 +396,14 @@ const GROUPS: EnvGroup[] = [
         key: 'NEXT_RUNTIME',
         label: 'Next.js runtime',
         validate: (value) => (value ? pass(`NEXT_RUNTIME=${value}`) : pass('NEXT_RUNTIME not exported; assuming node runtime.')),
+      },
+      {
+        key: 'VERCEL_GIT_COMMIT_SHA',
+        label: 'Vercel commit SHA',
+        validate: (value) =>
+          value
+            ? pass(`Commit ${value.slice(0, 8)}… detected.`)
+            : warn('VERCEL_GIT_COMMIT_SHA missing; commit attribution may be incomplete.'),
       },
       {
         key: 'GITHUB_REPOSITORY',
@@ -471,7 +499,7 @@ export async function GET(request: Request) {
     logStep('env-diagnostics:start')
     const hypotheses = [
       'Required environment variables might be missing or using fallback placeholders.',
-      'Supabase storage credentials may be missing from tmpkeys.txt or contain invalid values.',
+      'Supabase storage credentials may be missing from environment variables or contain invalid values.',
       'Email delivery could be disabled because provider API keys are absent.',
       'Google AI access may fail if the API key or model name is unset.',
     ]

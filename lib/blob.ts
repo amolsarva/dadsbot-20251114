@@ -184,7 +184,7 @@ function resolveMode(): StorageMode {
     logBlobDiagnostic('error', 'storage-mode:resolve-failed', { error: serializeError(error) })
     throw error instanceof Error
       ? error
-      : new Error('Unable to resolve storage mode; check tmpkeys.txt configuration.')
+      : new Error('Unable to resolve storage mode; verify STORAGE_MODE environment variable configuration.')
   }
 }
 
@@ -624,7 +624,7 @@ type HeaderLike =
 
 export function primeStorageContextFromHeaders(_headers: HeaderLike): boolean {
   logBlobDiagnostic('log', 'prime-context:skipped', {
-    note: 'Supabase storage does not require Netlify context headers.',
+    note: 'Supabase storage does not require Vercel context headers.',
   })
   return false
 }

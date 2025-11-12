@@ -31,7 +31,7 @@ function serializeError(error: unknown) {
 function collectRelevantHeaderKeys(headers: Headers): string[] {
   const keys: string[] = []
   for (const key of headers.keys()) {
-    if (key.toLowerCase().startsWith('x-nf') || key.toLowerCase().startsWith('x-netlify')) {
+    if (key.toLowerCase().startsWith('x-vercel')) {
       keys.push(key)
     }
   }

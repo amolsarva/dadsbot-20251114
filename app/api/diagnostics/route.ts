@@ -44,7 +44,7 @@ const ENDPOINTS: EndpointSummary[] = [
     key: 'tues',
     method: 'POST',
     path: '/api/diagnostics/tues',
-    description: 'Netlify-hosted credential diagnostic that mirrors the curl workflow for TUES.',
+    description: 'Credential diagnostic that mirrors the curl workflow for TUES.',
   },
   {
     key: 'smoke',
@@ -69,17 +69,16 @@ const ENDPOINTS: EndpointSummary[] = [
 function detectDeployment() {
   const metadata = resolveDeploymentMetadata()
   const platform = metadata.platform
-  const functionBase = platform === 'netlify' ? '/.netlify/functions' : null
 
   return {
     platform,
-    functionBase,
     nodeEnv: process.env.NODE_ENV,
     edgeMiddleware: Boolean(process.env.NEXT_RUNTIME && process.env.NEXT_RUNTIME !== 'nodejs'),
-    netlifySiteId: metadata.siteId ?? null,
-    netlifySiteName: metadata.siteName ?? null,
-    deployContext: metadata.context ?? null,
-    deployUrl: metadata.deployUrl ?? metadata.deployPrimeUrl ?? metadata.siteUrl ?? null,
+    vercelProjectId: metadata.projectId ?? null,
+    vercelOrgId: metadata.orgId ?? null,
+    environment: metadata.environment ?? null,
+    deployUrl: metadata.deployUrl ?? metadata.siteUrl ?? null,
+    siteUrl: metadata.siteUrl ?? null,
     deployId: metadata.deployId,
     branch: metadata.branch,
     commitRef: metadata.commitRef,
@@ -87,23 +86,20 @@ function detectDeployment() {
 }
 
 const TROUBLESHOOTING = [
-  'If this endpoint returns 404 in production, the diagnostics routes were not bundled as server functions.',
-  'Confirm your build preserves the Next.js app directory and that Netlify is using the Next.js runtime.',
-  'When deploying to Netlify without the Next adapter, place functions under netlify/functions or configure `netlify.toml`.',
-  'Use `netlify functions:list` or `netlify dev` locally to confirm the diagnostics handlers are registered.',
+  'If this endpoint returns 404 in production, confirm the Next.js app directory deployed server functions on your platform.',
+  'Ensure Vercel project settings expose required environment variables before running diagnostics.',
+  'Use `vercel dev` locally or the Vercel dashboard logs to confirm server handlers are active.',
 ]
 
 export async function GET() {
   try {
     const deployment = detectDeployment()
 
-    const preferredBase = deployment.functionBase ? `${deployment.functionBase}/diagnostics` : '/api/diagnostics'
-
     return NextResponse.json({
       ok: true,
       message:
         'Diagnostics base route is available. Invoke the specific endpoints below to run targeted checks.',
-      preferredBase,
+      preferredBase: '/api/diagnostics',
       deployment,
       endpoints: ENDPOINTS,
       troubleshooting: TROUBLESHOOTING,

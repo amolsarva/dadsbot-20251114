@@ -47,12 +47,12 @@ type DeploymentSnapshot = {
   pathname?: string
   releaseId?: string
   deployId?: string
-  deployContext?: string
+  environment?: string
   deployUrl?: string
-  deployPrimeUrl?: string
   siteUrl?: string
-  netlifySiteUrl?: string
   branch?: string
+  projectId?: string
+  orgId?: string
 }
 
 type BlobFlowStep = {
@@ -123,11 +123,11 @@ function readClientEnvSummary(additional?: Record<string, unknown>) {
   return {
     timestamp: diagnosticsTimestamp(),
     deployId: deployment?.deployId ?? null,
-    deployContext: deployment?.context ?? null,
+    environment: deployment?.environment ?? null,
     deployUrl: deployment?.deployUrl ?? null,
-    deployPrimeUrl: deployment?.deployPrimeUrl ?? null,
     siteUrl: deployment?.siteUrl ?? null,
-    netlifySiteUrl: deployment?.siteUrl ?? null,
+    projectId: deployment?.projectId ?? null,
+    orgId: deployment?.orgId ?? null,
     branch: deployment?.branch ?? null,
     ...browserSummary,
     ...(additional ?? {}),
@@ -279,21 +279,23 @@ function readDeploymentSnapshot(): DeploymentSnapshot | null {
     if (typeof deploymentMetadata.deployId === 'string' && deploymentMetadata.deployId.length) {
       snapshot.deployId = deploymentMetadata.deployId
     }
-    if (typeof deploymentMetadata.context === 'string' && deploymentMetadata.context.length) {
-      snapshot.deployContext = deploymentMetadata.context
+    if (typeof deploymentMetadata.environment === 'string' && deploymentMetadata.environment.length) {
+      snapshot.environment = deploymentMetadata.environment
     }
     if (typeof deploymentMetadata.deployUrl === 'string' && deploymentMetadata.deployUrl.length) {
       snapshot.deployUrl = deploymentMetadata.deployUrl
     }
-    if (typeof deploymentMetadata.deployPrimeUrl === 'string' && deploymentMetadata.deployPrimeUrl.length) {
-      snapshot.deployPrimeUrl = deploymentMetadata.deployPrimeUrl
-    }
     if (typeof deploymentMetadata.siteUrl === 'string' && deploymentMetadata.siteUrl.length) {
       snapshot.siteUrl = deploymentMetadata.siteUrl
-      snapshot.netlifySiteUrl = deploymentMetadata.siteUrl
     }
     if (typeof deploymentMetadata.branch === 'string' && deploymentMetadata.branch.length) {
       snapshot.branch = deploymentMetadata.branch
+    }
+    if (typeof deploymentMetadata.projectId === 'string' && deploymentMetadata.projectId.length) {
+      snapshot.projectId = deploymentMetadata.projectId
+    }
+    if (typeof deploymentMetadata.orgId === 'string' && deploymentMetadata.orgId.length) {
+      snapshot.orgId = deploymentMetadata.orgId
     }
   }
 
@@ -316,8 +318,8 @@ function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot 
   if (typeof raw.supabaseServiceRoleKey === 'string' && raw.supabaseServiceRoleKey.length) {
     summary.push(`Service role key: ${raw.supabaseServiceRoleKey}`)
   }
-  if (typeof raw.tmpKeysPath === 'string' && raw.tmpKeysPath.length) {
-    summary.push(`tmpkeys: ${raw.tmpKeysPath}`)
+  if (typeof raw.secretsSource === 'string' && raw.secretsSource.length) {
+    summary.push(`Secrets source: ${raw.secretsSource}`)
   }
 
   if (deployment) {
@@ -331,8 +333,8 @@ function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot 
     if (deployment.pathname) {
       summary.push(`Deployment path: ${deployment.pathname}`)
     }
-    if (deployment.deployContext) {
-      summary.push(`Runtime context: ${deployment.deployContext}`)
+    if (deployment.environment) {
+      summary.push(`Environment: ${deployment.environment}`)
     }
     if (deployment.branch) {
       summary.push(`Branch: ${deployment.branch}`)
@@ -340,13 +342,7 @@ function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot 
     if (deployment.deployUrl) {
       summary.push(`Deploy URL: ${deployment.deployUrl}`)
     }
-    if (deployment.deployPrimeUrl) {
-      summary.push(`Preview URL: ${deployment.deployPrimeUrl}`)
-    }
-    if (deployment.netlifySiteUrl) {
-      summary.push(`Netlify site URL: ${deployment.netlifySiteUrl}`)
-    }
-    if (deployment.siteUrl && deployment.siteUrl !== deployment.netlifySiteUrl) {
+    if (deployment.siteUrl) {
       summary.push(`Site URL: ${deployment.siteUrl}`)
     }
     if (deployment.deployId) {
@@ -354,6 +350,12 @@ function summarizeSupabaseDiagnostics(raw: any, deployment?: DeploymentSnapshot 
     }
     if (deployment.releaseId) {
       summary.push(`Build ID: ${deployment.releaseId}`)
+    }
+    if (deployment.projectId) {
+      summary.push(`Project ID: ${deployment.projectId}`)
+    }
+    if (deployment.orgId) {
+      summary.push(`Org ID: ${deployment.orgId}`)
     }
   }
 
@@ -388,7 +390,9 @@ function formatSummary(key: TestKey, data: any): string {
       if (env.blobDiagnostics.supabaseServiceRoleKey) {
         diagParts.push(`serviceRole=${env.blobDiagnostics.supabaseServiceRoleKey}`)
       }
-      if (env.blobDiagnostics.tmpKeysPath) diagParts.push(`tmpkeys=${env.blobDiagnostics.tmpKeysPath}`)
+    if (env.blobDiagnostics.secretsSource) {
+      diagParts.push(`secrets=${env.blobDiagnostics.secretsSource}`)
+    }
       parts.push(`Storage diag: ${diagParts.length ? diagParts.join(' · ') : 'no diagnostics available'}`)
     }
     return parts.join(' · ')
@@ -403,7 +407,7 @@ function formatSummary(key: TestKey, data: any): string {
       detailParts.push(`service role ${diagnostics.supabaseServiceRoleKey}`)
     }
     if (diagnostics.supabaseUrl) detailParts.push(`url ${diagnostics.supabaseUrl}`)
-    if (diagnostics.tmpKeysPath) detailParts.push(`tmpkeys ${diagnostics.tmpKeysPath}`)
+    if (diagnostics.secretsSource) detailParts.push(`secrets ${diagnostics.secretsSource}`)
     const flow: BlobFlowDiagnostics | undefined = Array.isArray(data?.flow?.steps)
       ? (data.flow as BlobFlowDiagnostics)
       : undefined
@@ -1012,8 +1016,8 @@ export default function DiagnosticsPage() {
       if (deploymentSnapshot.pathname) {
         append(`[deployment] Path: ${deploymentSnapshot.pathname}`)
       }
-      if (deploymentSnapshot.deployContext) {
-        append(`[deployment] Runtime context: ${deploymentSnapshot.deployContext}`)
+      if (deploymentSnapshot.environment) {
+        append(`[deployment] Environment: ${deploymentSnapshot.environment}`)
       }
       if (deploymentSnapshot.branch) {
         append(`[deployment] Branch: ${deploymentSnapshot.branch}`)
@@ -1021,13 +1025,7 @@ export default function DiagnosticsPage() {
       if (deploymentSnapshot.deployUrl) {
         append(`[deployment] Deploy URL: ${deploymentSnapshot.deployUrl}`)
       }
-      if (deploymentSnapshot.deployPrimeUrl) {
-        append(`[deployment] Preview URL: ${deploymentSnapshot.deployPrimeUrl}`)
-      }
-      if (deploymentSnapshot.netlifySiteUrl) {
-        append(`[deployment] Netlify site URL: ${deploymentSnapshot.netlifySiteUrl}`)
-      }
-      if (deploymentSnapshot.siteUrl && deploymentSnapshot.siteUrl !== deploymentSnapshot.netlifySiteUrl) {
+      if (deploymentSnapshot.siteUrl) {
         append(`[deployment] Site URL: ${deploymentSnapshot.siteUrl}`)
       }
       if (deploymentSnapshot.deployId) {
@@ -1035,6 +1033,12 @@ export default function DiagnosticsPage() {
       }
       if (deploymentSnapshot.releaseId) {
         append(`[deployment] Build ID: ${deploymentSnapshot.releaseId}`)
+      }
+      if (deploymentSnapshot.projectId) {
+        append(`[deployment] Project ID: ${deploymentSnapshot.projectId}`)
+      }
+      if (deploymentSnapshot.orgId) {
+        append(`[deployment] Org ID: ${deploymentSnapshot.orgId}`)
       }
     } else {
       append('[deployment] Unable to determine current deployment origin from browser context.')
