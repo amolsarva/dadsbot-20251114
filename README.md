@@ -44,6 +44,7 @@
 - **Memory Log review:** use the Supabase dashboard (Storage → Buckets) or CLI to inspect per-session manifests under `sessions/<SESSION_ID>/` and primers at `memory/primers/<HANDLE>.md`.
 
 ## Deployment & runtime notes
+- **Blob storage readiness:** set `STORAGE_MODE` to `memory` for local testing or `supabase` with the Supabase URL, service role key, and storage bucket. After updating secrets, redeploy/restart and hit `/api/health`; the endpoint now fails loudly when storage is misconfigured.
 - **Supabase-first storage:** configure `STORAGE_MODE=supabase` alongside Supabase URL, bucket, and service role key via your Vercel environment variables.
 - **Providers:** Google Gemini is the default; set `GOOGLE_API_KEY` and `GOOGLE_MODEL` for production. TTS falls back to the browser if `/api/tts` cannot return media.
 - **Session storage:** manifests and transcripts stream to Supabase Storage using the configured bucket and service role key.

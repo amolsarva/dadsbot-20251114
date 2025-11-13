@@ -24,8 +24,9 @@ Use this walkthrough to confirm the Supabase credentials that power uploads from
 
 ## 3. Deploy and validate
 1. Redeploy the site after updating secrets.
-2. Visit `/api/diagnostics/storage` or the `/diagnostics` page. Storage should report `provider: "supabase"`, include your bucket name, and confirm health probes succeeded.
-3. If diagnostics show `mode: "memory"`, the runtime could not read the Supabase environment variables. Check the deployment logs for `[diagnostic] storage:environment:failed` entries and confirm Vercel propagated the latest secrets.
+2. Visit `/api/health` — the endpoint now throws when blob storage is unconfigured, so a 200 response confirms the store is wired correctly.
+3. Visit `/api/diagnostics/storage` or the `/diagnostics` page. Storage should report `provider: "supabase"`, include your bucket name, and confirm health probes succeeded.
+4. If diagnostics show `mode: "memory"`, the runtime could not read the Supabase environment variables. Check the deployment logs for `[diagnostic] storage:environment:failed` entries and confirm Vercel propagated the latest secrets.
 
 ## 4. Test uploads end-to-end
 1. Record a short session in the deployed app.

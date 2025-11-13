@@ -272,7 +272,7 @@ describe('memory continuity across requests', () => {
       pathname: `sessions/${session.id}/session-${session.id}.json`,
       url: manifestUrl,
       downloadUrl: manifestUrl,
-      uploadedAt: new Date(),
+      uploadedAt: new Date().toISOString(),
     }
 
     data.__dangerousResetMemoryState()

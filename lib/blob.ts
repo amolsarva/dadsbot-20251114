@@ -46,7 +46,9 @@ type MemoryBlobRecord = {
   cacheControl?: string
 }
 
-type StorageMode = 'supabase' | 'memory'
+export type BlobStorageMode = 'supabase' | 'memory'
+
+type StorageMode = BlobStorageMode
 
 type SupabaseState = {
   url: string
@@ -548,11 +550,18 @@ export function clearFallbackBlobs() {
   logBlobDiagnostic('log', 'memory:cleared')
 }
 
-export async function blobHealth() {
+export type BlobHealthReport = {
+  ok: boolean
+  mode: BlobStorageMode
+  reason?: string | null
+  bucket?: string | null
+}
+
+export async function blobHealth(): Promise<BlobHealthReport> {
   try {
     const mode = resolveMode()
     if (mode === 'memory') {
-      return { ok: true, mode, reason: 'memory storage active' }
+      return { ok: true, mode, reason: 'memory storage active', bucket: null }
     }
     const state = ensureSupabase()
     const endpoint = `${state.url}/storage/v1/object/list/${encodeURIComponent(state.bucket)}`
@@ -572,13 +581,18 @@ export async function blobHealth() {
         status: res.status,
         response: text.slice(0, 200),
       })
-      return { ok: false, mode, reason: text || `status ${res.status}` }
+      return { ok: false, mode, reason: text || `status ${res.status}`, bucket: state.bucket }
     }
     logBlobDiagnostic('log', 'health:supabase:success', { bucket: state.bucket })
     return { ok: true, mode, bucket: state.bucket }
   } catch (error) {
     logBlobDiagnostic('error', 'health:failed', { error: serializeError(error) })
-    return { ok: false, mode: 'supabase', reason: error instanceof Error ? error.message : 'unknown error' }
+    return {
+      ok: false,
+      mode: 'supabase',
+      reason: error instanceof Error ? error.message : 'unknown error',
+      bucket: null,
+    }
   }
 }
 

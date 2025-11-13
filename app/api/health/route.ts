@@ -57,6 +57,23 @@ function serializeError(error: unknown) {
   return { message: typeof error === 'string' ? error : 'Unknown error', value: error }
 }
 
+function formatStorageErrorDetail(error: unknown) {
+  if (!error) {
+    return 'Storage environment missing required configuration.'
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 export async function GET(request: Request) {
   logDiagnostic('log', 'request:start', {
     method: request.method,
@@ -75,6 +92,13 @@ export async function GET(request: Request) {
 
     const blob = await blobHealth()
     logDiagnostic('log', 'blob-health:complete', { blob })
+    if (!blob.ok) {
+      logDiagnostic('error', 'blob-health:failed', { blob })
+      const reasonDetail = blob.reason ? `Reason: ${blob.reason}.` : 'Reason: not provided.'
+      throw new Error(
+        `Blob storage health check failed in ${blob.mode} mode. ${reasonDetail} Verify STORAGE_MODE and required Supabase secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) or switch to memory mode for local testing.`,
+      )
+    }
 
     const db = await dbHealth()
     logDiagnostic('log', 'db-health:complete', { db })
@@ -85,6 +109,18 @@ export async function GET(request: Request) {
       configured: storageEnv.configured,
       bucket: (storageEnv as any).bucket ?? null,
     })
+    if (!storageEnv.configured) {
+      logDiagnostic('error', 'storage-env:unconfigured', {
+        provider: storageEnv.provider,
+        diagnostics: storageEnv.diagnostics,
+        bucket: (storageEnv as any).bucket ?? null,
+        error: storageEnv.error ? serializeError(storageEnv.error) : null,
+      })
+      const detail = formatStorageErrorDetail(storageEnv.error)
+      throw new Error(
+        `Blob storage is not configured. Set STORAGE_MODE to "memory" for local testing or provide Supabase credentials (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) and redeploy. Details: ${detail}`,
+      )
+    }
 
     const defaultEmail = resolveDefaultNotifyEmailServer()
 
