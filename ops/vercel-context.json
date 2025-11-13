@@ -1,0 +1,7 @@
+{
+  "fetchedAt": "2025-11-13T14:17:58.030Z",
+  "error": {
+    "message": "fetch failed",
+    "stack": "TypeError: fetch failed\n    at node:internal/deps/undici/undici:14900:13\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async fetchJson (file:///workspace/dadsbot/scripts/ops/fetch-vercel-metadata.mjs:45:20)\n    at async main (file:///workspace/dadsbot/scripts/ops/fetch-vercel-metadata.mjs:132:16)"
+  }
+}
