@@ -585,7 +585,7 @@ export async function GET(request: Request) {
       key,
       label: key,
       value: env[key] ?? null,
-      severity: 'info',
+      severity: 'ok',
       message: 'Not part of the curated diagnostics set.',
       strictFailure: false,
     }))
