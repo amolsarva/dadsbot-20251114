@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSession } from '@/lib/data'
-import { primeStorageContextFromHeaders } from '@/lib/blob'
+import { getBlobEnvironment, primeStorageContextFromHeaders } from '@/lib/blob'
 import { resolveDefaultNotifyEmailServer } from '@/lib/default-notify-email.server'
 import { getSecret } from '@/lib/secrets.server'
 
 const formatEnvSummary = () => ({
   DEFAULT_NOTIFY_EMAIL: getSecret('DEFAULT_NOTIFY_EMAIL') ? '[set]' : null,
+  storage: (() => {
+    try {
+      const env = getBlobEnvironment()
+      return {
+        provider: env.provider,
+        bucket: env.bucket ?? null,
+        configured: env.configured,
+        diagnostics: env.diagnostics,
+        error: env.error ? String(env.error) : null,
+      }
+    } catch (error: any) {
+      return {
+        provider: 'unknown',
+        configured: false,
+        diagnostics: null,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })(),
 })
 
 const logDiagnostic = (level: 'log' | 'error', message: string, detail?: unknown) => {
@@ -50,11 +69,27 @@ export async function POST(req: NextRequest) {
       ? payload.user_handle
       : null
 
+  const envSummary = formatEnvSummary()
+  if (!envSummary.storage?.configured) {
+    const message = 'Storage environment is not configured; cannot create a durable session.'
+    logDiagnostic('error', message, { envSummary })
+    return NextResponse.json(
+      {
+        ok: false,
+        error: message,
+        detail:
+          'Set STORAGE_MODE and provider secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) before attempting to start a session.',
+      },
+      { status: 500 },
+    )
+  }
+
   try {
     logDiagnostic('log', 'Attempting to create a session.', {
       emailsEnabled,
       hasEmail: Boolean(targetEmail),
       userHandle,
+      envSummary,
     })
     const session = await createSession({
       email_to: targetEmail,
