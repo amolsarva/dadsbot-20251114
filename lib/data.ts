@@ -646,6 +646,13 @@ export async function createSession({
       sessionId: s.id,
       blobDetails: blobDetails ?? null,
     })
+    const message =
+      'Persistent storage is unavailable; configure STORAGE_MODE and blob credentials before starting a new session.'
+    logDataDiagnostic('error', 'session-manifest:persist-initial:fatal', {
+      sessionId: s.id,
+      message,
+    })
+    throw new Error(message)
   }
   return s
 }
